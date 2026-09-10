@@ -81,12 +81,10 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mo
     subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray)
     bold_style = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontSize=10, fontName="Helvetica-Bold")
     
-    # Encabezado
     elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style))
     elements.append(Paragraph("INTEGRACIÓN DE INGRESOS Y EGRESOS - CORTE DE CAJA", subtitle_style))
     elements.append(Spacer(1, 15))
     
-    # Datos generales
     info_data = [
         [Paragraph(f"<b>Fecha:</b> {fecha_str}", bold_style), Paragraph(f"<b>Local / Ruta:</b> {local_str}", bold_style), Paragraph(f"<b>Responsable:</b> {responsable_str}", bold_style)]
     ]
@@ -100,7 +98,6 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mo
     elements.append(info_table)
     elements.append(Spacer(1, 15))
     
-    # Tabla de Gastos
     gastos_table_data = [["TIPO DE GASTO", "DETALLE", "TOTAL (Q)"]]
     total_gastos = 0.0
     
@@ -109,7 +106,6 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mo
             gastos_table_data.append([str(row["Categoría"]), str(row["Detalle"]), f"Q {row['Monto (Q)']:.2f}"])
             total_gastos += float(row["Monto (Q)"])
             
-    # Rellenar filas vacías si son pocas para que se parezca al formato impreso
     while len(gastos_table_data) < 10:
         gastos_table_data.append(["", "", ""])
         
@@ -130,7 +126,6 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mo
     elements.append(t_gastos)
     elements.append(Spacer(1, 15))
     
-    # Resumen de Ingresos y Cuadre
     total_ingresos = venta_mostrador + pago_pedidos
     neto = total_ingresos - total_gastos
     
@@ -261,7 +256,6 @@ if opcion_menu == "📝 Registro de Corte":
             st.success("✅ ¡Corte guardado y listo para imprimir!")
             st.balloons()
             
-            # Guardamos el PDF en session_state para que aparezca el botón de descarga inmediato
             pdf_buffer = generar_pdf_corte(fecha_corte.strftime('%d/%m/%Y'), local_ruta, responsable, gastos_editados, venta_mostrador, pago_pedidos)
             st.session_state['pdf_generado'] = pdf_buffer
             st.session_state['pdf_nombre'] = f"Corte_{fecha_corte.strftime('%d-%m-%Y')}.pdf"
@@ -272,7 +266,6 @@ if opcion_menu == "📝 Registro de Corte":
         else:
             st.warning("⚠️ Debes ingresar al menos una venta o un gasto para guardar.")
             
-    # Mostrar el botón de descarga si recien se guardó un corte
     if 'pdf_generado' in st.session_state:
         st.markdown("---")
         st.download_button(
@@ -285,7 +278,7 @@ if opcion_menu == "📝 Registro de Corte":
         )
 
 # ------------------------------------------
-# MÓDULO 2: HISTORIAL DE CORTES (Con PDF)
+# MÓDULO 2: HISTORIAL DE CORTES
 # ------------------------------------------
 elif opcion_menu == "📅 Historial de Cortes":
     st.title("📅 Consulta de Historial e Impresión")
@@ -315,10 +308,7 @@ elif opcion_menu == "📅 Historial de Cortes":
             
             st.markdown("---")
             
-            # Botón para generar el PDF de este histórico al instante
             ruta_nombre = ingresos_hist.iloc[0]['ruta'] if not ingresos_hist.empty else "LOCAL MERCADO"
-            
-            # Preparamos los gastos para la función del PDF
             df_para_pdf = pd.DataFrame({
                 "Categoría": gastos_hist['categoria'] if not gastos_hist.empty else [],
                 "Detalle": gastos_hist['detalle'] if not gastos_hist.empty else [],
@@ -374,28 +364,48 @@ elif opcion_menu == "📈 Estadísticas":
         st.info("📊 Esperando datos...")
 
 # ------------------------------------------
-# MÓDULO 4: PROVEEDORES
+# MÓDULO 4: PROVEEDORES (Con Factura / Documento)
 # ------------------------------------------
 elif opcion_menu == "💳 Proveedores":
     st.title("💳 Control de Créditos (Harina, Gas, etc.)")
     try:
         df_proveedores = conn.query("SELECT id, nombre, producto_servicio FROM proveedores", ttl=0)
+        
         with st.expander("➕ Registrar nueva cuenta por pagar"):
             with st.form("form_credito", clear_on_submit=True):
                 prov = st.selectbox("Proveedor", df_proveedores['nombre'])
+                
+                # Nuevo campo para la factura o documento
+                num_factura = st.text_input("📄 No. de Factura o Documento (Ej. FAC-12345)")
+                
                 monto_credito = st.number_input("Monto total de la deuda (Q)", min_value=0.00, step=100.00)
                 fecha_vencimiento = st.date_input("¿Cuándo toca pagar?", get_fecha_guate(), format="DD/MM/YYYY")
                 
                 if st.form_submit_button("Guardar Deuda"):
                     prov_id = df_proveedores.loc[df_proveedores['nombre'] == prov, 'id'].values[0]
                     with conn.session as s:
-                        s.execute(text("INSERT INTO cuentas_por_pagar (proveedor_id, fecha_compra, fecha_vencimiento, monto_total, saldo_pendiente) VALUES (:p, :f_compra, :f_vence, :monto, :saldo)"), 
-                                  {"p": int(prov_id), "f_compra": get_fecha_guate(), "f_vence": fecha_vencimiento, "monto": monto_credito, "saldo": monto_credito})
+                        s.execute(text("""
+                            INSERT INTO cuentas_por_pagar (proveedor_id, num_documento, fecha_compra, fecha_vencimiento, monto_total, saldo_pendiente) 
+                            VALUES (:p, :doc, :f_compra, :f_vence, :monto, :saldo)
+                        """), {
+                            "p": int(prov_id), 
+                            "doc": num_factura, 
+                            "f_compra": get_fecha_guate(), 
+                            "f_vence": fecha_vencimiento, 
+                            "monto": monto_credito, 
+                            "saldo": monto_credito
+                        })
                         s.commit()
                     st.success("✅ Deuda registrada correctamente.")
         
         st.subheader("🚨 Deudas Activas")
-        deudas_activas = conn.query("SELECT p.nombre as Proveedor, p.producto_servicio as Insumo, c.fecha_vencimiento as Vencimiento, c.saldo_pendiente as Saldo FROM cuentas_por_pagar c JOIN proveedores p ON c.proveedor_id = p.id WHERE c.estado = 'Pendiente'", ttl=0)
+        deudas_activas = conn.query("""
+            SELECT p.nombre as Proveedor, c.num_documento as Documento, p.producto_servicio as Insumo, 
+                   c.fecha_vencimiento as Vencimiento, c.saldo_pendiente as Saldo 
+            FROM cuentas_por_pagar c 
+            JOIN proveedores p ON c.proveedor_id = p.id 
+            WHERE c.estado = 'Pendiente'
+        """, ttl=0)
         
         if not deudas_activas.empty:
             deudas_activas['vencimiento'] = pd.to_datetime(deudas_activas['vencimiento']).dt.strftime('%d/%m/%Y')
