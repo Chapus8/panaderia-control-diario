@@ -364,20 +364,18 @@ elif opcion_menu == "📈 Estadísticas":
         st.info("📊 Esperando datos...")
 
 # ------------------------------------------
-# MÓDULO 4: PROVEEDORES (Crear, Editar, Borrar y Créditos)
+# MÓDULO 4: PROVEEDORES (Crear, Editar, Borrar y Créditos con Semáforo)
 # ------------------------------------------
 elif opcion_menu == "💳 Proveedores":
     st.title("💳 Control de Créditos y Proveedores")
     
     try:
-        # Pestañas internas para organizar la administración de proveedores
         tab_prov1, tab_prov2, tab_prov3 = st.tabs(["📋 Gestionar Proveedores", "➕ Registrar Deuda", "🚨 Deudas Activas"])
         
-        # --- SUBMÓDULO 1: GESTIONAR (CREAR, EDITAR, BORRAR PROVEEDORES) ---
+        # --- SUBMÓDULO 1: GESTIONAR PROVEEDORES ---
         with tab_prov1:
             st.subheader("Administrar Directorio de Proveedores")
             
-            # Formulario para CREAR nuevo proveedor
             with st.expander("➕ Agregar un Nuevo Proveedor"):
                 with st.form("form_nuevo_proveedor", clear_on_submit=True):
                     nuevo_nombre = st.text_input("Nombre del Proveedor (Ej. Molino Central)")
@@ -398,7 +396,6 @@ elif opcion_menu == "💳 Proveedores":
             df_prov_edit = conn.query("SELECT id, nombre, producto_servicio FROM proveedores ORDER BY id", ttl=0)
             
             if not df_prov_edit.empty:
-                # Tabla interactiva para editar nombres y productos directamente
                 proveedores_editados = st.data_editor(
                     df_prov_edit,
                     column_config={
@@ -433,7 +430,6 @@ elif opcion_menu == "💳 Proveedores":
                 if st.button("Eliminar Proveedor Seleccionado", type="secondary"):
                     id_borrar = df_prov_edit.loc[df_prov_edit['nombre'] == prov_a_borrar, 'id'].values[0]
                     with conn.session as s:
-                        # Borramos primero las cuentas por pagar asociadas para evitar errores de relación
                         s.execute(text("DELETE FROM cuentas_por_pagar WHERE proveedor_id = :id"), {"id": int(id_borrar)})
                         s.execute(text("DELETE FROM proveedores WHERE id = :id"), {"id": int(id_borrar)})
                         s.commit()
@@ -442,7 +438,7 @@ elif opcion_menu == "💳 Proveedores":
             else:
                 st.info("No hay proveedores registrados todavía.")
 
-        # --- SUBMÓDULO 2: REGISTRAR NUEVA CUENTA POR PAGAR ---
+        # --- SUBMÓDULO 2: REGISTRAR NUEVA DEUDA ---
         with tab_prov2:
             st.subheader("Registrar Factura o Crédito")
             df_proveedores = conn.query("SELECT id, nombre FROM proveedores ORDER BY nombre", ttl=0)
@@ -473,20 +469,53 @@ elif opcion_menu == "💳 Proveedores":
             else:
                 st.warning("⚠️ Primero debes registrar al menos un proveedor en la pestaña 'Gestionar Proveedores'.")
 
-        # --- SUBMÓDULO 3: DEUDAS ACTIVAS ---
+        # --- SUBMÓDULO 3: DEUDAS ACTIVAS CON SEMÁFORO ---
         with tab_prov3:
             st.subheader("Listado de Cuentas por Pagar")
             deudas_activas = conn.query("""
-                SELECT c.id as ID, p.nombre as Proveedor, c.num_documento as Documento, p.producto_servicio as Insumo, 
-                       c.fecha_vencimiento as Vencimiento, c.saldo_pendiente as Saldo 
+                SELECT c.id, p.nombre as proveedor, c.num_documento as documento, p.producto_servicio as insumo, 
+                       c.fecha_vencimiento as vencimiento, c.saldo_pendiente as saldo 
                 FROM cuentas_por_pagar c 
                 JOIN proveedores p ON c.proveedor_id = p.id 
                 WHERE c.estado = 'Pendiente'
             """, ttl=0)
             
             if not deudas_activas.empty:
-                deudas_activas['vencimiento'] = pd.to_datetime(deudas_activas['vencimiento']).dt.strftime('%d/%m/%Y')
-                st.dataframe(deudas_activas, use_container_width=True, hide_index=True)
+                hoy = get_fecha_guate()
+                
+                # Convertir la columna vencimiento a formato fecha de Python para poder compararla
+                deudas_activas['vencimiento'] = pd.to_datetime(deudas_activas['vencimiento']).dt.date
+                
+                # Función que decide qué color de semáforo poner
+                def asignar_semaforo(fecha_vence):
+                    if pd.isnull(fecha_vence): 
+                        return "⚪ Sin Fecha"
+                    dias_restantes = (fecha_vence - hoy).days
+                    if dias_restantes < 0: 
+                        return "🔴 Vencido"
+                    elif 0 <= dias_restantes <= 3: 
+                        return "🟡 Próximo (0-3 días)"
+                    else: 
+                        return "🟢 A tiempo"
+                
+                # Aplicamos la función y creamos la nueva columna de Estado al inicio
+                deudas_activas.insert(0, 'Estado', deudas_activas['vencimiento'].apply(asignar_semaforo))
+                
+                # Imprimimos la tabla con configuraciones especiales visuales
+                st.dataframe(
+                    deudas_activas, 
+                    column_config={
+                        "Estado": "Estatus",
+                        "id": "ID",
+                        "proveedor": "Proveedor",
+                        "documento": "Documento",
+                        "insumo": "Insumo",
+                        "vencimiento": st.column_config.DateColumn("Vencimiento", format="DD/MM/YYYY"),
+                        "saldo": st.column_config.NumberColumn("Saldo Pendiente", format="Q %.2f")
+                    },
+                    use_container_width=True, 
+                    hide_index=True
+                )
             else:
                 st.success("🎉 ¡Felicidades! No tienes deudas pendientes registradas.")
                 
