@@ -5,6 +5,13 @@ from datetime import datetime
 import pytz
 import plotly.express as px
 
+# Librerías para generar el PDF
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+import io
+
 # ==========================================
 # 1. CONFIGURACIÓN PRINCIPAL
 # ==========================================
@@ -63,6 +70,98 @@ def obtener_o_crear_corte(fecha_corte):
             s.commit()
             return s.execute(text("SELECT id FROM cortes_diarios WHERE fecha = :fecha"), {"fecha": fecha_corte}).fetchone()[0]
 
+# --- FUNCIÓN PARA GENERAR EL PDF TAMAÑO CARTA ---
+def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mostrador, pago_pedidos):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50"))
+    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray)
+    bold_style = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontSize=10, fontName="Helvetica-Bold")
+    
+    # Encabezado
+    elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style))
+    elements.append(Paragraph("INTEGRACIÓN DE INGRESOS Y EGRESOS - CORTE DE CAJA", subtitle_style))
+    elements.append(Spacer(1, 15))
+    
+    # Datos generales
+    info_data = [
+        [Paragraph(f"<b>Fecha:</b> {fecha_str}", bold_style), Paragraph(f"<b>Local / Ruta:</b> {local_str}", bold_style), Paragraph(f"<b>Responsable:</b> {responsable_str}", bold_style)]
+    ]
+    info_table = Table(info_data, colWidths=[150, 200, 190])
+    info_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EAFAF1")),
+        ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#27AE60")),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('PADDING', (0,0), (-1,-1), 6),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 15))
+    
+    # Tabla de Gastos
+    gastos_table_data = [["TIPO DE GASTO", "DETALLE", "TOTAL (Q)"]]
+    total_gastos = 0.0
+    
+    for index, row in df_gastos.iterrows():
+        if pd.notna(row["Categoría"]) and row["Monto (Q)"] > 0:
+            gastos_table_data.append([str(row["Categoría"]), str(row["Detalle"]), f"Q {row['Monto (Q)']:.2f}"])
+            total_gastos += float(row["Monto (Q)"])
+            
+    # Rellenar filas vacías si son pocas para que se parezca al formato impreso
+    while len(gastos_table_data) < 10:
+        gastos_table_data.append(["", "", ""])
+        
+    gastos_table_data.append(["", "TOTAL GASTOS", f"Q {total_gastos:.2f}"])
+    
+    t_gastos = Table(gastos_table_data, colWidths=[180, 240, 120])
+    t_gastos.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#27AE60")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('ALIGN', (2,0), (2,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 6),
+        ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor("#D4EFDF")),
+        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+    ]))
+    elements.append(t_gastos)
+    elements.append(Spacer(1, 15))
+    
+    # Resumen de Ingresos y Cuadre
+    total_ingresos = venta_mostrador + pago_pedidos
+    neto = total_ingresos - total_gastos
+    
+    resumen_data = [
+        ["RESUMEN FINANCIERO", "MONTO"],
+        ["Venta de Pan (Mostrador)", f"Q {venta_mostrador:.2f}"],
+        ["Pago de Pedidos / Abonos", f"Q {pago_pedidos:.2f}"],
+        ["TOTAL INGRESOS", f"Q {total_ingresos:.2f}"],
+        ["TOTAL GASTOS", f"Q {total_gastos:.2f}"],
+        ["SALDO NETO ENTREGADO", f"Q {neto:.2f}"]
+    ]
+    
+    t_resumen = Table(resumen_data, colWidths=[340, 200])
+    t_resumen.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('BACKGROUND', (0,3), (-1,3), colors.HexColor("#EAECEE")),
+        ('BACKGROUND', (0,5), (-1,5), colors.HexColor("#D4EFDF")),
+        ('FONTNAME', (0,3), (-1,3), 'Helvetica-Bold'),
+        ('FONTNAME', (0,5), (-1,5), 'Helvetica-Bold'),
+    ]))
+    elements.append(t_resumen)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
 # ==========================================
 # 4. MENÚ LATERAL (SIDEBAR)
 # ==========================================
@@ -106,7 +205,6 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("---")
     st.markdown("### 💸 Detalle de Gastos")
     
-    # Configuramos 11 filas por defecto para mayor comodidad
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
         for _ in range(11): 
@@ -160,22 +258,38 @@ if opcion_menu == "📝 Registro de Corte":
                                   {"c": corte_id, "cat": int(cat_id), "d": row["Detalle"], "m": row["Monto (Q)"]})
                 s.commit()
             
-            st.success("✅ ¡Corte guardado exitosamente en la base de datos!")
+            st.success("✅ ¡Corte guardado y listo para imprimir!")
             st.balloons()
             
-            # Reiniciar la tabla con 11 filas vacías tras guardar
+            # Guardamos el PDF en session_state para que aparezca el botón de descarga inmediato
+            pdf_buffer = generar_pdf_corte(fecha_corte.strftime('%d/%m/%Y'), local_ruta, responsable, gastos_editados, venta_mostrador, pago_pedidos)
+            st.session_state['pdf_generado'] = pdf_buffer
+            st.session_state['pdf_nombre'] = f"Corte_{fecha_corte.strftime('%d-%m-%Y')}.pdf"
+            
             st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
             for _ in range(11):
                 st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
         else:
             st.warning("⚠️ Debes ingresar al menos una venta o un gasto para guardar.")
+            
+    # Mostrar el botón de descarga si recien se guardó un corte
+    if 'pdf_generado' in st.session_state:
+        st.markdown("---")
+        st.download_button(
+            label="📥 Descargar PDF del Corte para Imprimir",
+            data=st.session_state['pdf_generado'],
+            file_name=st.session_state['pdf_nombre'],
+            mime="application/pdf",
+            type="secondary",
+            use_container_width=True
+        )
 
 # ------------------------------------------
-# MÓDULO 2: HISTORIAL DE CORTES
+# MÓDULO 2: HISTORIAL DE CORTES (Con PDF)
 # ------------------------------------------
 elif opcion_menu == "📅 Historial de Cortes":
-    st.title("📅 Consulta de Historial")
-    st.write("Selecciona un día para ver todo el movimiento de caja de esa fecha.")
+    st.title("📅 Consulta de Historial e Impresión")
+    st.write("Selecciona un día para consultar el movimiento o reimprimir su PDF.")
     
     fecha_consulta = st.date_input("Consultar fecha:", get_fecha_guate(), format="DD/MM/YYYY")
     
@@ -188,8 +302,10 @@ elif opcion_menu == "📅 Historial de Cortes":
             ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {corte_id}", ttl=0)
             gastos_hist = conn.query(f"SELECT c.nombre as Categoria, g.detalle as Detalle, g.monto as Monto FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id WHERE g.corte_id = {corte_id}", ttl=0)
             
-            sum_ingresos = (ingresos_hist['venta_mostrador'].sum() if not ingresos_hist.empty else 0) + (ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0)
-            sum_gastos = gastos_hist['monto'].sum() if not gastos_hist.empty else 0
+            sum_venta = ingresos_hist['venta_mostrador'].sum() if not ingresos_hist.empty else 0.0
+            sum_pedidos = ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0.0
+            sum_ingresos = sum_venta + sum_pedidos
+            sum_gastos = gastos_hist['monto'].sum() if not gastos_hist.empty else 0.0
             
             st.markdown(f"### Resumen del {fecha_consulta.strftime('%d/%m/%Y')}")
             col_h1, col_h2, col_h3 = st.columns(3)
@@ -198,8 +314,30 @@ elif opcion_menu == "📅 Historial de Cortes":
             col_h3.metric("⚖️ Saldo Neto", f"Q {sum_ingresos - sum_gastos:.2f}")
             
             st.markdown("---")
-            col_t1, col_t2 = st.columns(2)
             
+            # Botón para generar el PDF de este histórico al instante
+            ruta_nombre = ingresos_hist.iloc[0]['ruta'] if not ingresos_hist.empty else "LOCAL MERCADO"
+            
+            # Preparamos los gastos para la función del PDF
+            df_para_pdf = pd.DataFrame({
+                "Categoría": gastos_hist['categoria'] if not gastos_hist.empty else [],
+                "Detalle": gastos_hist['detalle'] if not gastos_hist.empty else [],
+                "Monto (Q)": gastos_hist['monto'] if not gastos_hist.empty else []
+            })
+            
+            pdf_historico = generar_pdf_corte(fecha_consulta.strftime('%d/%m/%Y'), ruta_nombre, "Histórico", df_para_pdf, sum_venta, sum_pedidos)
+            
+            st.download_button(
+                label=f"📥 Descargar PDF del {fecha_consulta.strftime('%d/%m/%Y')} para Imprimir",
+                data=pdf_historico,
+                file_name=f"Corte_{fecha_consulta.strftime('%d-%m-%Y')}.pdf",
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True
+            )
+            
+            st.markdown("---")
+            col_t1, col_t2 = st.columns(2)
             with col_t1:
                 st.subheader("💰 Desglose de Ingresos")
                 if not ingresos_hist.empty:
