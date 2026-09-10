@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 from sqlalchemy import text
-from datetime import date
+from datetime import datetime
+import pytz
 import plotly.express as px
 
 # ==========================================
@@ -13,6 +14,11 @@ USUARIOS = {
     "roberto": "esquipulas123", 
     "admin": "admin2026"
 }
+
+# Función para obtener la fecha exacta en Guatemala
+def get_fecha_guate():
+    zona_guate = pytz.timezone('America/Guatemala')
+    return datetime.now(zona_guate).date()
 
 # ==========================================
 # 2. SISTEMA DE SEGURIDAD (LOGIN)
@@ -37,13 +43,14 @@ if not st.session_state['logueado']:
                     st.rerun()
                 else:
                     st.error("❌ Usuario o contraseña incorrectos")
-    st.stop() # Detiene la app aquí si no hay login válido
+    st.stop()
 
 # ==========================================
 # 3. BARRA LATERAL Y CONEXIÓN A BASE DE DATOS
 # ==========================================
 with st.sidebar:
     st.markdown(f"### 👤 {st.session_state['usuario'].capitalize()}")
+    st.write(f"📅 Fecha actual: {get_fecha_guate().strftime('%d/%m/%Y')}")
     if st.button("🚪 Cerrar Sesión"):
         st.session_state['logueado'] = False
         st.rerun()
@@ -77,13 +84,15 @@ tab1, tab2, tab3 = st.tabs(["📝 Ingreso de Corte (Formato Papel)", "📈 Estad
 with tab1:
     st.markdown("### 📋 Datos del Corte")
     
-    # Obtener catálogos de la base de datos, ttl=0 para que siempre esté actualizado
     df_rutas = conn.query("SELECT id, nombre FROM rutas_locales", ttl=0)
     df_categorias = conn.query("SELECT id, nombre FROM categorias_gasto", ttl=0)
     lista_categorias = df_categorias['nombre'].tolist()
     
     col_enc1, col_enc2, col_enc3 = st.columns(3)
-    fecha_corte = col_enc1.date_input("Fecha del Corte", date.today())
+    
+    # Aquí aplicamos el formato Día/Mes/Año y la fecha de Guatemala por defecto
+    fecha_corte = col_enc1.date_input("Fecha del Corte", get_fecha_guate(), format="DD/MM/YYYY")
+    
     local_ruta = col_enc2.selectbox("Local / Ruta", df_rutas['nombre'])
     responsable = col_enc3.selectbox("Responsable", ["Dania", "Ana Judith Ramirez", "Stephanie Roldan", "Wendy Perez", "Otro"])
     
@@ -91,10 +100,9 @@ with tab1:
     st.markdown("### 💸 Detalle de Gastos")
     st.caption("Agrega filas para cada gasto que aparezca en tu corte de papel.")
     
-    # Crear la tabla dinámica vacía
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
-        for _ in range(5): # 5 filas vacías por defecto
+        for _ in range(5): 
             st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
 
     gastos_editados = st.data_editor(
@@ -110,7 +118,6 @@ with tab1:
     
     st.markdown("---")
     
-    # Totales
     col_tot1, col_tot2, col_tot3 = st.columns(3)
     venta_total = col_tot1.number_input("💰 Venta Total (Efectivo Entregado)", min_value=0.00, step=100.00)
     
@@ -118,19 +125,16 @@ with tab1:
     col_tot2.metric("📉 Suma Total de Gastos", f"Q {total_gastos_calc:.2f}")
     col_tot3.metric("⚖️ Total Neto", f"Q {venta_total - total_gastos_calc:.2f}")
     
-    # Botón Guardar
     if st.button("💾 Guardar Corte Completo", type="primary", use_container_width=True):
         if venta_total > 0 or total_gastos_calc > 0:
             corte_id = obtener_o_crear_corte(fecha_corte)
             ruta_id = df_rutas.loc[df_rutas['nombre'] == local_ruta, 'id'].values[0]
             
             with conn.session as s:
-                # Guardar Ingreso
                 if venta_total > 0:
                     s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total) VALUES (:c, :r, :v)"), 
                               {"c": corte_id, "r": int(ruta_id), "v": venta_total})
                 
-                # Guardar Gastos de la tabla
                 for index, row in gastos_editados.iterrows():
                     if pd.notna(row["Categoría"]) and row["Monto (Q)"] > 0:
                         cat_id = df_categorias.loc[df_categorias['nombre'] == row["Categoría"], 'id'].values[0]
@@ -142,7 +146,6 @@ with tab1:
             st.success("✅ ¡Corte guardado exitosamente en la base de datos!")
             st.balloons()
             
-            # Limpiar la tabla de gastos para el siguiente corte
             st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
             for _ in range(5):
                 st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
@@ -150,14 +153,13 @@ with tab1:
             st.warning("⚠️ Debes ingresar al menos una venta o un gasto para guardar.")
 
 # ------------------------------------------
-# PESTAÑA 2: ESTADÍSTICAS (Corregida)
+# PESTAÑA 2: ESTADÍSTICAS
 # ------------------------------------------
 with tab2:
     st.header("Visualización de Finanzas")
     st.write("Mira en qué se está yendo el dinero.")
     
     try:
-        # ttl=0 evita el caché y siempre busca datos frescos
         gastos_totales = conn.query("SELECT c.nombre as categoria, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id GROUP BY c.nombre", ttl=0)
         
         if not gastos_totales.empty and gastos_totales['total'].sum() > 0:
@@ -181,7 +183,9 @@ with tab3:
             with st.form("form_credito", clear_on_submit=True):
                 prov = st.selectbox("Proveedor", df_proveedores['nombre'])
                 monto_credito = st.number_input("Monto total de la deuda (Q)", min_value=0.00, step=100.00)
-                fecha_vencimiento = st.date_input("¿Cuándo toca pagar?")
+                
+                # También aplicamos el formato Día/Mes/Año aquí
+                fecha_vencimiento = st.date_input("¿Cuándo toca pagar?", get_fecha_guate(), format="DD/MM/YYYY")
                 
                 if st.form_submit_button("Guardar Deuda"):
                     prov_id = df_proveedores.loc[df_proveedores['nombre'] == prov, 'id'].values[0]
@@ -189,7 +193,7 @@ with tab3:
                         s.execute(text("""
                             INSERT INTO cuentas_por_pagar (proveedor_id, fecha_compra, fecha_vencimiento, monto_total, saldo_pendiente)
                             VALUES (:p, :f_compra, :f_vence, :monto, :saldo)
-                        """), {"p": int(prov_id), "f_compra": date.today(), "f_vence": fecha_vencimiento, "monto": monto_credito, "saldo": monto_credito})
+                        """), {"p": int(prov_id), "f_compra": get_fecha_guate(), "f_vence": fecha_vencimiento, "monto": monto_credito, "saldo": monto_credito})
                         s.commit()
                     st.success("✅ Deuda registrada correctamente.")
         
@@ -202,6 +206,8 @@ with tab3:
         """, ttl=0)
         
         if not deudas_activas.empty:
+            # Formateamos la fecha en la tabla de deudas para que también se vea al revés
+            deudas_activas['vencimiento'] = pd.to_datetime(deudas_activas['vencimiento']).dt.strftime('%d/%m/%Y')
             st.dataframe(deudas_activas, use_container_width=True, hide_index=True)
         else:
             st.success("🎉 ¡Felicidades! No tienes deudas pendientes registradas.")
