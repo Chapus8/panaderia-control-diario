@@ -71,7 +71,6 @@ with st.sidebar:
     st.write(f"📅 Fecha actual: {get_fecha_guate().strftime('%d/%m/%Y')}")
     st.markdown("---")
     
-    # Aquí creamos el menú de navegación visual
     st.subheader("📍 Menú Principal")
     opcion_menu = st.radio(
         "Selecciona un módulo:",
@@ -107,16 +106,17 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("---")
     st.markdown("### 💸 Detalle de Gastos")
     
+    # Configuramos 11 filas por defecto para mayor comodidad
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
-        for _ in range(5): 
+        for _ in range(11): 
             st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
 
     gastos_editados = st.data_editor(
         st.session_state.gastos_df,
         column_config={
             "Categoría": st.column_config.SelectboxColumn("Tipo de Gasto", options=lista_categorias, required=True),
-            "Detalle": st.column_config.TextColumn("Detalle (Ej. Bono Dania, Huevos)"),
+            "Detalle": st.column_config.TextColumn("Detalle (Ej. Almuerzo, Bono, Harina)"),
             "Monto (Q)": st.column_config.NumberColumn("Total (Q)", min_value=0.0, format="Q %.2f")
         },
         num_rows="dynamic",
@@ -163,14 +163,15 @@ if opcion_menu == "📝 Registro de Corte":
             st.success("✅ ¡Corte guardado exitosamente en la base de datos!")
             st.balloons()
             
+            # Reiniciar la tabla con 11 filas vacías tras guardar
             st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
-            for _ in range(5):
+            for _ in range(11):
                 st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
         else:
             st.warning("⚠️ Debes ingresar al menos una venta o un gasto para guardar.")
 
 # ------------------------------------------
-# MÓDULO 2: HISTORIAL DE CORTES (¡NUEVO!)
+# MÓDULO 2: HISTORIAL DE CORTES
 # ------------------------------------------
 elif opcion_menu == "📅 Historial de Cortes":
     st.title("📅 Consulta de Historial")
@@ -179,21 +180,17 @@ elif opcion_menu == "📅 Historial de Cortes":
     fecha_consulta = st.date_input("Consultar fecha:", get_fecha_guate(), format="DD/MM/YYYY")
     
     try:
-        # Buscar si existe un corte para esa fecha
         corte_data = conn.query(f"SELECT id FROM cortes_diarios WHERE fecha = '{fecha_consulta}'", ttl=0)
         
         if not corte_data.empty:
             corte_id = corte_data.iloc[0]['id']
             
-            # Extraer ingresos y gastos de ese corte específico
             ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {corte_id}", ttl=0)
             gastos_hist = conn.query(f"SELECT c.nombre as Categoria, g.detalle as Detalle, g.monto as Monto FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id WHERE g.corte_id = {corte_id}", ttl=0)
             
-            # Sumatorias
-            sum_ingresos = ingresos_hist['venta_mostrador'].sum() + ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0
+            sum_ingresos = (ingresos_hist['venta_mostrador'].sum() if not ingresos_hist.empty else 0) + (ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0)
             sum_gastos = gastos_hist['monto'].sum() if not gastos_hist.empty else 0
             
-            # Mostrar métricas del día consultado
             st.markdown(f"### Resumen del {fecha_consulta.strftime('%d/%m/%Y')}")
             col_h1, col_h2, col_h3 = st.columns(3)
             col_h1.metric("💵 Total Ingresado", f"Q {sum_ingresos:.2f}")
@@ -213,7 +210,6 @@ elif opcion_menu == "📅 Historial de Cortes":
             with col_t2:
                 st.subheader("💸 Desglose de Gastos")
                 if not gastos_hist.empty:
-                    # Agregamos formato de moneda a los gastos visualmente
                     st.dataframe(gastos_hist, use_container_width=True, hide_index=True)
                 else:
                     st.info("No se registraron gastos este día.")
