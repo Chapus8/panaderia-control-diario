@@ -15,7 +15,6 @@ USUARIOS = {
     "admin": "admin2026"
 }
 
-# Función para obtener la fecha exacta en Guatemala
 def get_fecha_guate():
     zona_guate = pytz.timezone('America/Guatemala')
     return datetime.now(zona_guate).date()
@@ -46,15 +45,8 @@ if not st.session_state['logueado']:
     st.stop()
 
 # ==========================================
-# 3. BARRA LATERAL Y CONEXIÓN A BASE DE DATOS
+# 3. CONEXIÓN A BASE DE DATOS Y FUNCIONES
 # ==========================================
-with st.sidebar:
-    st.markdown(f"### 👤 {st.session_state['usuario'].capitalize()}")
-    st.write(f"📅 Fecha actual: {get_fecha_guate().strftime('%d/%m/%Y')}")
-    if st.button("🚪 Cerrar Sesión"):
-        st.session_state['logueado'] = False
-        st.rerun()
-
 try:
     conn = st.connection("postgresql", type="sql")
 except Exception as e:
@@ -72,16 +64,35 @@ def obtener_o_crear_corte(fecha_corte):
             return s.execute(text("SELECT id FROM cortes_diarios WHERE fecha = :fecha"), {"fecha": fecha_corte}).fetchone()[0]
 
 # ==========================================
-# 4. INTERFAZ DE LA APLICACIÓN
+# 4. MENÚ LATERAL (SIDEBAR)
 # ==========================================
-st.title("🍞 Sistema de Control - Panadería Judith")
+with st.sidebar:
+    st.markdown(f"### 👤 {st.session_state['usuario'].capitalize()}")
+    st.write(f"📅 Fecha actual: {get_fecha_guate().strftime('%d/%m/%Y')}")
+    st.markdown("---")
+    
+    # Aquí creamos el menú de navegación visual
+    st.subheader("📍 Menú Principal")
+    opcion_menu = st.radio(
+        "Selecciona un módulo:",
+        ["📝 Registro de Corte", "📅 Historial de Cortes", "📈 Estadísticas", "💳 Proveedores"],
+        label_visibility="collapsed"
+    )
+    
+    st.markdown("---")
+    if st.button("🚪 Cerrar Sesión"):
+        st.session_state['logueado'] = False
+        st.rerun()
 
-tab1, tab2, tab3 = st.tabs(["📝 Ingreso de Corte (Formato Papel)", "📈 Estadísticas", "💳 Proveedores y Créditos"])
+# ==========================================
+# 5. MÓDULOS DE LA APLICACIÓN
+# ==========================================
 
 # ------------------------------------------
-# PESTAÑA 1: INGRESO DE CORTE TIPO PAPEL
+# MÓDULO 1: REGISTRO DE CORTE
 # ------------------------------------------
-with tab1:
+if opcion_menu == "📝 Registro de Corte":
+    st.title("🍞 Ingreso Diario de Corte")
     st.markdown("### 📋 Datos del Corte")
     
     df_rutas = conn.query("SELECT id, nombre FROM rutas_locales", ttl=0)
@@ -94,10 +105,7 @@ with tab1:
     responsable = col_enc3.selectbox("Responsable", ["Dania", "Ana Judith Ramirez", "Stephanie Roldan", "Wendy Perez", "Otro"])
     
     st.markdown("---")
-    
-    # --- TABLA DE GASTOS ---
     st.markdown("### 💸 Detalle de Gastos")
-    st.caption("Anota aquí todos los gastos que salieron de la caja hoy (salarios, bonos, insumos, etc.)")
     
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
@@ -116,8 +124,6 @@ with tab1:
     )
     
     st.markdown("---")
-    
-    # --- NUEVA SECCIÓN DE INGRESOS ---
     st.markdown("### 💰 Resumen de Ingresos")
     col_ing1, col_ing2, col_ing3 = st.columns(3)
     
@@ -128,8 +134,6 @@ with tab1:
     total_gastos_calc = gastos_editados["Monto (Q)"].sum()
     
     st.markdown("---")
-    
-    # --- CUADRE FINAL ---
     st.markdown("### 📊 Cuadre Final")
     col_tot1, col_tot2, col_tot3 = st.columns(3)
     
@@ -145,24 +149,20 @@ with tab1:
             ruta_id = df_rutas.loc[df_rutas['nombre'] == local_ruta, 'id'].values[0]
             
             with conn.session as s:
-                # Guardamos los ingresos separados en la base de datos (venta normal y el abono a créditos/pedidos)
                 if total_ingresos > 0:
                     s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total, credito_pagado) VALUES (:c, :r, :v, :cp)"), 
                               {"c": corte_id, "r": int(ruta_id), "v": venta_mostrador, "cp": pago_pedidos})
                 
-                # Guardamos la tabla de gastos
                 for index, row in gastos_editados.iterrows():
                     if pd.notna(row["Categoría"]) and row["Monto (Q)"] > 0:
                         cat_id = df_categorias.loc[df_categorias['nombre'] == row["Categoría"], 'id'].values[0]
                         s.execute(text("INSERT INTO gastos (corte_id, categoria_id, detalle, monto) VALUES (:c, :cat, :d, :m)"), 
                                   {"c": corte_id, "cat": int(cat_id), "d": row["Detalle"], "m": row["Monto (Q)"]})
-                
                 s.commit()
             
             st.success("✅ ¡Corte guardado exitosamente en la base de datos!")
             st.balloons()
             
-            # Limpiamos la tabla de gastos
             st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
             for _ in range(5):
                 st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
@@ -170,32 +170,82 @@ with tab1:
             st.warning("⚠️ Debes ingresar al menos una venta o un gasto para guardar.")
 
 # ------------------------------------------
-# PESTAÑA 2: ESTADÍSTICAS
+# MÓDULO 2: HISTORIAL DE CORTES (¡NUEVO!)
 # ------------------------------------------
-with tab2:
-    st.header("Visualización de Finanzas")
-    st.write("Mira en qué se está yendo el dinero.")
+elif opcion_menu == "📅 Historial de Cortes":
+    st.title("📅 Consulta de Historial")
+    st.write("Selecciona un día para ver todo el movimiento de caja de esa fecha.")
+    
+    fecha_consulta = st.date_input("Consultar fecha:", get_fecha_guate(), format="DD/MM/YYYY")
     
     try:
-        gastos_totales = conn.query("SELECT c.nombre as categoria, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id GROUP BY c.nombre", ttl=0)
+        # Buscar si existe un corte para esa fecha
+        corte_data = conn.query(f"SELECT id FROM cortes_diarios WHERE fecha = '{fecha_consulta}'", ttl=0)
         
+        if not corte_data.empty:
+            corte_id = corte_data.iloc[0]['id']
+            
+            # Extraer ingresos y gastos de ese corte específico
+            ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {corte_id}", ttl=0)
+            gastos_hist = conn.query(f"SELECT c.nombre as Categoria, g.detalle as Detalle, g.monto as Monto FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id WHERE g.corte_id = {corte_id}", ttl=0)
+            
+            # Sumatorias
+            sum_ingresos = ingresos_hist['venta_mostrador'].sum() + ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0
+            sum_gastos = gastos_hist['monto'].sum() if not gastos_hist.empty else 0
+            
+            # Mostrar métricas del día consultado
+            st.markdown(f"### Resumen del {fecha_consulta.strftime('%d/%m/%Y')}")
+            col_h1, col_h2, col_h3 = st.columns(3)
+            col_h1.metric("💵 Total Ingresado", f"Q {sum_ingresos:.2f}")
+            col_h2.metric("📉 Total Gastado", f"Q {sum_gastos:.2f}")
+            col_h3.metric("⚖️ Saldo Neto", f"Q {sum_ingresos - sum_gastos:.2f}")
+            
+            st.markdown("---")
+            col_t1, col_t2 = st.columns(2)
+            
+            with col_t1:
+                st.subheader("💰 Desglose de Ingresos")
+                if not ingresos_hist.empty:
+                    st.dataframe(ingresos_hist, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No se registraron ingresos este día.")
+            
+            with col_t2:
+                st.subheader("💸 Desglose de Gastos")
+                if not gastos_hist.empty:
+                    # Agregamos formato de moneda a los gastos visualmente
+                    st.dataframe(gastos_hist, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No se registraron gastos este día.")
+        else:
+            st.warning(f"No hay ningún corte guardado en el sistema para la fecha {fecha_consulta.strftime('%d/%m/%Y')}.")
+            
+    except Exception as e:
+        st.error("Error al consultar el historial.")
+
+# ------------------------------------------
+# MÓDULO 3: ESTADÍSTICAS
+# ------------------------------------------
+elif opcion_menu == "📈 Estadísticas":
+    st.title("📈 Visualización de Finanzas")
+    st.write("Mira en qué se está yendo el dinero.")
+    try:
+        gastos_totales = conn.query("SELECT c.nombre as categoria, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id GROUP BY c.nombre", ttl=0)
         if not gastos_totales.empty and gastos_totales['total'].sum() > 0:
             fig = px.pie(gastos_totales, values='total', names='categoria', hole=0.4, title="Distribución Histórica de Gastos")
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("📊 Aún no hay gastos registrados para generar la gráfica. Guarda tu primer corte en la pestaña anterior.")
+            st.info("📊 Aún no hay suficientes datos para generar la gráfica.")
     except Exception as e:
-        st.info("📊 Esperando que ingreses los primeros datos para mostrar las estadísticas...")
+        st.info("📊 Esperando datos...")
 
 # ------------------------------------------
-# PESTAÑA 3: CONTROL DE PROVEEDORES Y DEUDAS
+# MÓDULO 4: PROVEEDORES
 # ------------------------------------------
-with tab3:
-    st.header("Control de Créditos (Harina, Gas, etc.)")
-    
+elif opcion_menu == "💳 Proveedores":
+    st.title("💳 Control de Créditos (Harina, Gas, etc.)")
     try:
         df_proveedores = conn.query("SELECT id, nombre, producto_servicio FROM proveedores", ttl=0)
-        
         with st.expander("➕ Registrar nueva cuenta por pagar"):
             with st.form("form_credito", clear_on_submit=True):
                 prov = st.selectbox("Proveedor", df_proveedores['nombre'])
@@ -205,26 +255,18 @@ with tab3:
                 if st.form_submit_button("Guardar Deuda"):
                     prov_id = df_proveedores.loc[df_proveedores['nombre'] == prov, 'id'].values[0]
                     with conn.session as s:
-                        s.execute(text("""
-                            INSERT INTO cuentas_por_pagar (proveedor_id, fecha_compra, fecha_vencimiento, monto_total, saldo_pendiente)
-                            VALUES (:p, :f_compra, :f_vence, :monto, :saldo)
-                        """), {"p": int(prov_id), "f_compra": get_fecha_guate(), "f_vence": fecha_vencimiento, "monto": monto_credito, "saldo": monto_credito})
+                        s.execute(text("INSERT INTO cuentas_por_pagar (proveedor_id, fecha_compra, fecha_vencimiento, monto_total, saldo_pendiente) VALUES (:p, :f_compra, :f_vence, :monto, :saldo)"), 
+                                  {"p": int(prov_id), "f_compra": get_fecha_guate(), "f_vence": fecha_vencimiento, "monto": monto_credito, "saldo": monto_credito})
                         s.commit()
                     st.success("✅ Deuda registrada correctamente.")
         
         st.subheader("🚨 Deudas Activas")
-        deudas_activas = conn.query("""
-            SELECT p.nombre as Proveedor, p.producto_servicio as Insumo, c.fecha_vencimiento as Vencimiento, c.saldo_pendiente as Saldo
-            FROM cuentas_por_pagar c
-            JOIN proveedores p ON c.proveedor_id = p.id
-            WHERE c.estado = 'Pendiente'
-        """, ttl=0)
+        deudas_activas = conn.query("SELECT p.nombre as Proveedor, p.producto_servicio as Insumo, c.fecha_vencimiento as Vencimiento, c.saldo_pendiente as Saldo FROM cuentas_por_pagar c JOIN proveedores p ON c.proveedor_id = p.id WHERE c.estado = 'Pendiente'", ttl=0)
         
         if not deudas_activas.empty:
             deudas_activas['vencimiento'] = pd.to_datetime(deudas_activas['vencimiento']).dt.strftime('%d/%m/%Y')
             st.dataframe(deudas_activas, use_container_width=True, hide_index=True)
         else:
             st.success("🎉 ¡Felicidades! No tienes deudas pendientes registradas.")
-            
     except Exception as e:
-        st.error("Aún configurando la tabla de proveedores...")
+        st.error("Configurando tabla de proveedores...")
