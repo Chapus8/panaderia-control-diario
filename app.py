@@ -364,20 +364,38 @@ elif opcion_menu == "📈 Estadísticas":
         st.info("📊 Esperando datos...")
 
 # ------------------------------------------
-# MÓDULO 4: PROVEEDORES (Con Factura / Documento)
+# MÓDULO 4: PROVEEDORES (Con opción para agregar nuevos)
 # ------------------------------------------
 elif opcion_menu == "💳 Proveedores":
-    st.title("💳 Control de Créditos (Harina, Gas, etc.)")
+    st.title("💳 Control de Créditos y Proveedores")
+    
     try:
+        # 1. EXPANDER PARA AGREGAR NUEVO PROVEEDOR
+        with st.expander("🏢 Agregar un Nuevo Proveedor a la lista"):
+            with st.form("form_nuevo_proveedor", clear_on_submit=True):
+                nuevo_prov_nombre = st.text_input("Nombre del Proveedor (Ej. Zeta Gas, Molino Nuevo)")
+                nuevo_prov_producto = st.text_input("¿Qué producto o servicio vende? (Ej. Gas Propano, Harina)")
+                
+                if st.form_submit_button("Guardar Proveedor"):
+                    if nuevo_prov_nombre:
+                        with conn.session as s:
+                            s.execute(text("INSERT INTO proveedores (nombre, producto_servicio) VALUES (:n, :p)"), 
+                                      {"n": nuevo_prov_nombre, "p": nuevo_prov_producto})
+                            s.commit()
+                        st.success(f"✅ ¡Proveedor '{nuevo_prov_nombre}' agregado con éxito! Ya puedes seleccionarlo abajo.")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Debes escribir al menos el nombre del proveedor.")
+
+        st.markdown("---")
+
+        # 2. EXPANDER PARA REGISTRAR CUENTA POR PAGAR
         df_proveedores = conn.query("SELECT id, nombre, producto_servicio FROM proveedores", ttl=0)
         
-        with st.expander("➕ Registrar nueva cuenta por pagar"):
+        with st.expander("➕ Registrar nueva cuenta por pagar (Deuda)"):
             with st.form("form_credito", clear_on_submit=True):
-                prov = st.selectbox("Proveedor", df_proveedores['nombre'])
-                
-                # Nuevo campo para la factura o documento
+                prov = st.selectbox("Seleccionar Proveedor", df_proveedores['nombre'])
                 num_factura = st.text_input("📄 No. de Factura o Documento (Ej. FAC-12345)")
-                
                 monto_credito = st.number_input("Monto total de la deuda (Q)", min_value=0.00, step=100.00)
                 fecha_vencimiento = st.date_input("¿Cuándo toca pagar?", get_fecha_guate(), format="DD/MM/YYYY")
                 
@@ -412,5 +430,6 @@ elif opcion_menu == "💳 Proveedores":
             st.dataframe(deudas_activas, use_container_width=True, hide_index=True)
         else:
             st.success("🎉 ¡Felicidades! No tienes deudas pendientes registradas.")
+            
     except Exception as e:
-        st.error("Configurando tabla de proveedores...")
+        st.error("Error al cargar el módulo de proveedores.")
