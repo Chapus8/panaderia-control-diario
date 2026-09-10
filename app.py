@@ -89,16 +89,15 @@ with tab1:
     lista_categorias = df_categorias['nombre'].tolist()
     
     col_enc1, col_enc2, col_enc3 = st.columns(3)
-    
-    # Aquí aplicamos el formato Día/Mes/Año y la fecha de Guatemala por defecto
     fecha_corte = col_enc1.date_input("Fecha del Corte", get_fecha_guate(), format="DD/MM/YYYY")
-    
     local_ruta = col_enc2.selectbox("Local / Ruta", df_rutas['nombre'])
     responsable = col_enc3.selectbox("Responsable", ["Dania", "Ana Judith Ramirez", "Stephanie Roldan", "Wendy Perez", "Otro"])
     
     st.markdown("---")
+    
+    # --- TABLA DE GASTOS ---
     st.markdown("### 💸 Detalle de Gastos")
-    st.caption("Agrega filas para cada gasto que aparezca en tu corte de papel.")
+    st.caption("Anota aquí todos los gastos que salieron de la caja hoy (salarios, bonos, insumos, etc.)")
     
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
@@ -109,7 +108,7 @@ with tab1:
         st.session_state.gastos_df,
         column_config={
             "Categoría": st.column_config.SelectboxColumn("Tipo de Gasto", options=lista_categorias, required=True),
-            "Detalle": st.column_config.TextColumn("Detalle (Ej. Almuerzo, Bono, Harina)"),
+            "Detalle": st.column_config.TextColumn("Detalle (Ej. Bono Dania, Huevos)"),
             "Monto (Q)": st.column_config.NumberColumn("Total (Q)", min_value=0.0, format="Q %.2f")
         },
         num_rows="dynamic",
@@ -118,23 +117,40 @@ with tab1:
     
     st.markdown("---")
     
-    col_tot1, col_tot2, col_tot3 = st.columns(3)
-    venta_total = col_tot1.number_input("💰 Venta Total (Efectivo Entregado)", min_value=0.00, step=100.00)
+    # --- NUEVA SECCIÓN DE INGRESOS ---
+    st.markdown("### 💰 Resumen de Ingresos")
+    col_ing1, col_ing2, col_ing3 = st.columns(3)
     
+    venta_mostrador = col_ing1.number_input("🍞 Venta de Pan (Mostrador)", min_value=0.00, step=50.00)
+    pago_pedidos = col_ing2.number_input("🎂 Pago de Pedidos / Abonos", min_value=0.00, step=50.00)
+    
+    total_ingresos = venta_mostrador + pago_pedidos
     total_gastos_calc = gastos_editados["Monto (Q)"].sum()
+    
+    st.markdown("---")
+    
+    # --- CUADRE FINAL ---
+    st.markdown("### 📊 Cuadre Final")
+    col_tot1, col_tot2, col_tot3 = st.columns(3)
+    
+    col_tot1.metric("💵 Total Ingresos (Venta + Pedidos)", f"Q {total_ingresos:.2f}")
     col_tot2.metric("📉 Suma Total de Gastos", f"Q {total_gastos_calc:.2f}")
-    col_tot3.metric("⚖️ Total Neto", f"Q {venta_total - total_gastos_calc:.2f}")
+    col_tot3.metric("⚖️ Total Neto Entregado", f"Q {total_ingresos - total_gastos_calc:.2f}")
+    
+    st.markdown("<br>", unsafe_allow_html=True)
     
     if st.button("💾 Guardar Corte Completo", type="primary", use_container_width=True):
-        if venta_total > 0 or total_gastos_calc > 0:
+        if total_ingresos > 0 or total_gastos_calc > 0:
             corte_id = obtener_o_crear_corte(fecha_corte)
             ruta_id = df_rutas.loc[df_rutas['nombre'] == local_ruta, 'id'].values[0]
             
             with conn.session as s:
-                if venta_total > 0:
-                    s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total) VALUES (:c, :r, :v)"), 
-                              {"c": corte_id, "r": int(ruta_id), "v": venta_total})
+                # Guardamos los ingresos separados en la base de datos (venta normal y el abono a créditos/pedidos)
+                if total_ingresos > 0:
+                    s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total, credito_pagado) VALUES (:c, :r, :v, :cp)"), 
+                              {"c": corte_id, "r": int(ruta_id), "v": venta_mostrador, "cp": pago_pedidos})
                 
+                # Guardamos la tabla de gastos
                 for index, row in gastos_editados.iterrows():
                     if pd.notna(row["Categoría"]) and row["Monto (Q)"] > 0:
                         cat_id = df_categorias.loc[df_categorias['nombre'] == row["Categoría"], 'id'].values[0]
@@ -146,6 +162,7 @@ with tab1:
             st.success("✅ ¡Corte guardado exitosamente en la base de datos!")
             st.balloons()
             
+            # Limpiamos la tabla de gastos
             st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
             for _ in range(5):
                 st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
@@ -183,8 +200,6 @@ with tab3:
             with st.form("form_credito", clear_on_submit=True):
                 prov = st.selectbox("Proveedor", df_proveedores['nombre'])
                 monto_credito = st.number_input("Monto total de la deuda (Q)", min_value=0.00, step=100.00)
-                
-                # También aplicamos el formato Día/Mes/Año aquí
                 fecha_vencimiento = st.date_input("¿Cuándo toca pagar?", get_fecha_guate(), format="DD/MM/YYYY")
                 
                 if st.form_submit_button("Guardar Deuda"):
@@ -206,7 +221,6 @@ with tab3:
         """, ttl=0)
         
         if not deudas_activas.empty:
-            # Formateamos la fecha en la tabla de deudas para que también se vea al revés
             deudas_activas['vencimiento'] = pd.to_datetime(deudas_activas['vencimiento']).dt.strftime('%d/%m/%Y')
             st.dataframe(deudas_activas, use_container_width=True, hide_index=True)
         else:
