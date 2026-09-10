@@ -70,6 +70,27 @@ def obtener_o_crear_corte(fecha_corte):
             s.commit()
             return s.execute(text("SELECT id FROM cortes_diarios WHERE fecha = :fecha"), {"fecha": fecha_corte}).fetchone()[0]
 
+# --- FUNCIÓN MAGICA DE AUTOCOMPLETADO ---
+def autocompletar_categoria(detalle):
+    d = str(detalle).lower()
+    if any(x in d for x in ['harina', 'azucar', 'azúcar', 'manteca', 'levadura', 'leche', 'huevo', 'huevos']):
+        return 'MATERIA PRIMA'
+    elif any(x in d for x in ['bono', 'sueldo', 'pago', 'salario', 'anticipo', 'almuerzo', 'planilla', 'turno']):
+        return 'SUELDOS Y SALARIOS'
+    elif any(x in d for x in ['gasolina', 'moto', 'vehiculo', 'repuesto', 'llanta', 'aceite', 'mecanico']):
+        return 'REPUESTOS Y REPARACIONES'
+    elif any(x in d for x in ['bolsa', 'bandeja', 'calcomania', 'papel', 'limpieza', 'empaque', 'escoba', 'jabon']):
+        return 'UTILES Y EMPAQUES'
+    elif any(x in d for x in ['prestamo', 'tarjeta', 'interes', 'abono', 'banco', 'cuota']):
+        return 'PRESTAMOS E INTERESES'
+    elif any(x in d for x in ['pasta', 'pollo']):
+        return 'COMPRAS DE PASTA DE POLLO'
+    elif any(x in d for x in ['bebida', 'dulce', 'tostada', 'marquesote', 'agua', 'gaseosa']):
+        return 'OTRAS MERCADERIAS'
+    elif any(x in d for x in ['gas ', 'propano', 'luz', 'internet', 'telefono', 'alquiler', 'impuesto', 'basura']):
+        return 'OTROS GASTOS'
+    return 'OTROS GASTOS' # Categoría por defecto si no reconoce la palabra
+
 # --- FUNCIÓN PARA GENERAR EL PDF TAMAÑO CARTA ---
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mostrador, pago_pedidos):
     buffer = io.BytesIO()
@@ -102,8 +123,10 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mo
     total_gastos = 0.0
     
     for index, row in df_gastos.iterrows():
-        if pd.notna(row["Categoría"]) and row["Monto (Q)"] > 0:
-            gastos_table_data.append([str(row["Categoría"]), str(row["Detalle"]), f"Q {row['Monto (Q)']:.2f}"])
+        # Aquí verificamos si hay monto para incluirlo en el PDF, la categoría ya viene autocompletada
+        if row["Monto (Q)"] > 0:
+            categoria_mostrar = row["Categoría"] if pd.notna(row["Categoría"]) else "OTROS GASTOS"
+            gastos_table_data.append([str(categoria_mostrar), str(row["Detalle"]), f"Q {row['Monto (Q)']:.2f}"])
             total_gastos += float(row["Monto (Q)"])
             
     while len(gastos_table_data) < 10:
@@ -199,17 +222,19 @@ if opcion_menu == "📝 Registro de Corte":
     
     st.markdown("---")
     st.markdown("### 💸 Detalle de Gastos")
+    st.caption("✨ **Truco:** Deja la columna 'Tipo de Gasto' en blanco. ¡El sistema leerá tu detalle y lo asignará automáticamente al guardar!")
     
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
         for _ in range(11): 
             st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
 
+    # Aquí quitamos el required=True para que puedas dejarlo en blanco
     gastos_editados = st.data_editor(
         st.session_state.gastos_df,
         column_config={
-            "Categoría": st.column_config.SelectboxColumn("Tipo de Gasto", options=lista_categorias, required=True),
-            "Detalle": st.column_config.TextColumn("Detalle (Ej. Almuerzo, Bono, Harina)"),
+            "Categoría": st.column_config.SelectboxColumn("Tipo de Gasto (Opcional)", options=lista_categorias, required=False),
+            "Detalle": st.column_config.TextColumn("Detalle (Ej. Bono Dania, Huevos)"),
             "Monto (Q)": st.column_config.NumberColumn("Total (Q)", min_value=0.0, format="Q %.2f")
         },
         num_rows="dynamic",
@@ -246,16 +271,29 @@ if opcion_menu == "📝 Registro de Corte":
                     s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total, credito_pagado) VALUES (:c, :r, :v, :cp)"), 
                               {"c": corte_id, "r": int(ruta_id), "v": venta_mostrador, "cp": pago_pedidos})
                 
+                # Procesamos y autocompletamos los gastos
                 for index, row in gastos_editados.iterrows():
-                    if pd.notna(row["Categoría"]) and row["Monto (Q)"] > 0:
-                        cat_id = df_categorias.loc[df_categorias['nombre'] == row["Categoría"], 'id'].values[0]
-                        s.execute(text("INSERT INTO gastos (corte_id, categoria_id, detalle, monto) VALUES (:c, :cat, :d, :m)"), 
-                                  {"c": corte_id, "cat": int(cat_id), "d": row["Detalle"], "m": row["Monto (Q)"]})
+                    monto = row["Monto (Q)"]
+                    if monto > 0:
+                        detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else "Gasto sin detalle"
+                        categoria = row["Categoría"]
+                        
+                        # Si está vacía, aplicamos la magia
+                        if pd.isna(categoria) or categoria is None or categoria == "":
+                            categoria = autocompletar_categoria(detalle)
+                            gastos_editados.at[index, "Categoría"] = categoria
+                        
+                        # Insertamos a la base de datos
+                        if categoria in lista_categorias:
+                            cat_id = df_categorias.loc[df_categorias['nombre'] == categoria, 'id'].values[0]
+                            s.execute(text("INSERT INTO gastos (corte_id, categoria_id, detalle, monto) VALUES (:c, :cat, :d, :m)"), 
+                                      {"c": corte_id, "cat": int(cat_id), "d": detalle, "m": monto})
                 s.commit()
             
             st.success("✅ ¡Corte guardado y listo para imprimir!")
             st.balloons()
             
+            # Generar el PDF con los datos ya autocompletados
             pdf_buffer = generar_pdf_corte(fecha_corte.strftime('%d/%m/%Y'), local_ruta, responsable, gastos_editados, venta_mostrador, pago_pedidos)
             st.session_state['pdf_generado'] = pdf_buffer
             st.session_state['pdf_nombre'] = f"Corte_{fecha_corte.strftime('%d-%m-%Y')}.pdf"
@@ -364,7 +402,7 @@ elif opcion_menu == "📈 Estadísticas":
         st.info("📊 Esperando datos...")
 
 # ------------------------------------------
-# MÓDULO 4: PROVEEDORES (Crear, Editar, Borrar y Créditos con Semáforo)
+# MÓDULO 4: PROVEEDORES
 # ------------------------------------------
 elif opcion_menu == "💳 Proveedores":
     st.title("💳 Control de Créditos y Proveedores")
@@ -482,11 +520,8 @@ elif opcion_menu == "💳 Proveedores":
             
             if not deudas_activas.empty:
                 hoy = get_fecha_guate()
-                
-                # Convertir la columna vencimiento a formato fecha de Python para poder compararla
                 deudas_activas['vencimiento'] = pd.to_datetime(deudas_activas['vencimiento']).dt.date
                 
-                # Función que decide qué color de semáforo poner
                 def asignar_semaforo(fecha_vence):
                     if pd.isnull(fecha_vence): 
                         return "⚪ Sin Fecha"
@@ -498,10 +533,8 @@ elif opcion_menu == "💳 Proveedores":
                     else: 
                         return "🟢 A tiempo"
                 
-                # Aplicamos la función y creamos la nueva columna de Estado al inicio
                 deudas_activas.insert(0, 'Estado', deudas_activas['vencimiento'].apply(asignar_semaforo))
                 
-                # Imprimimos la tabla con configuraciones especiales visuales
                 st.dataframe(
                     deudas_activas, 
                     column_config={
