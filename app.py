@@ -364,72 +364,131 @@ elif opcion_menu == "📈 Estadísticas":
         st.info("📊 Esperando datos...")
 
 # ------------------------------------------
-# MÓDULO 4: PROVEEDORES (Con opción para agregar nuevos)
+# MÓDULO 4: PROVEEDORES (Crear, Editar, Borrar y Créditos)
 # ------------------------------------------
 elif opcion_menu == "💳 Proveedores":
     st.title("💳 Control de Créditos y Proveedores")
     
     try:
-        # 1. EXPANDER PARA AGREGAR NUEVO PROVEEDOR
-        with st.expander("🏢 Agregar un Nuevo Proveedor a la lista"):
-            with st.form("form_nuevo_proveedor", clear_on_submit=True):
-                nuevo_prov_nombre = st.text_input("Nombre del Proveedor (Ej. Zeta Gas, Molino Nuevo)")
-                nuevo_prov_producto = st.text_input("¿Qué producto o servicio vende? (Ej. Gas Propano, Harina)")
-                
-                if st.form_submit_button("Guardar Proveedor"):
-                    if nuevo_prov_nombre:
-                        with conn.session as s:
-                            s.execute(text("INSERT INTO proveedores (nombre, producto_servicio) VALUES (:n, :p)"), 
-                                      {"n": nuevo_prov_nombre, "p": nuevo_prov_producto})
-                            s.commit()
-                        st.success(f"✅ ¡Proveedor '{nuevo_prov_nombre}' agregado con éxito! Ya puedes seleccionarlo abajo.")
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Debes escribir al menos el nombre del proveedor.")
-
-        st.markdown("---")
-
-        # 2. EXPANDER PARA REGISTRAR CUENTA POR PAGAR
-        df_proveedores = conn.query("SELECT id, nombre, producto_servicio FROM proveedores", ttl=0)
+        # Pestañas internas para organizar la administración de proveedores
+        tab_prov1, tab_prov2, tab_prov3 = st.tabs(["📋 Gestionar Proveedores", "➕ Registrar Deuda", "🚨 Deudas Activas"])
         
-        with st.expander("➕ Registrar nueva cuenta por pagar (Deuda)"):
-            with st.form("form_credito", clear_on_submit=True):
-                prov = st.selectbox("Seleccionar Proveedor", df_proveedores['nombre'])
-                num_factura = st.text_input("📄 No. de Factura o Documento (Ej. FAC-12345)")
-                monto_credito = st.number_input("Monto total de la deuda (Q)", min_value=0.00, step=100.00)
-                fecha_vencimiento = st.date_input("¿Cuándo toca pagar?", get_fecha_guate(), format="DD/MM/YYYY")
-                
-                if st.form_submit_button("Guardar Deuda"):
-                    prov_id = df_proveedores.loc[df_proveedores['nombre'] == prov, 'id'].values[0]
-                    with conn.session as s:
-                        s.execute(text("""
-                            INSERT INTO cuentas_por_pagar (proveedor_id, num_documento, fecha_compra, fecha_vencimiento, monto_total, saldo_pendiente) 
-                            VALUES (:p, :doc, :f_compra, :f_vence, :monto, :saldo)
-                        """), {
-                            "p": int(prov_id), 
-                            "doc": num_factura, 
-                            "f_compra": get_fecha_guate(), 
-                            "f_vence": fecha_vencimiento, 
-                            "monto": monto_credito, 
-                            "saldo": monto_credito
-                        })
-                        s.commit()
-                    st.success("✅ Deuda registrada correctamente.")
-        
-        st.subheader("🚨 Deudas Activas")
-        deudas_activas = conn.query("""
-            SELECT p.nombre as Proveedor, c.num_documento as Documento, p.producto_servicio as Insumo, 
-                   c.fecha_vencimiento as Vencimiento, c.saldo_pendiente as Saldo 
-            FROM cuentas_por_pagar c 
-            JOIN proveedores p ON c.proveedor_id = p.id 
-            WHERE c.estado = 'Pendiente'
-        """, ttl=0)
-        
-        if not deudas_activas.empty:
-            deudas_activas['vencimiento'] = pd.to_datetime(deudas_activas['vencimiento']).dt.strftime('%d/%m/%Y')
-            st.dataframe(deudas_activas, use_container_width=True, hide_index=True)
-        else:
-            st.success("🎉 ¡Felicidades! No tienes deudas pendientes registradas.")
+        # --- SUBMÓDULO 1: GESTIONAR (CREAR, EDITAR, BORRAR PROVEEDORES) ---
+        with tab_prov1:
+            st.subheader("Administrar Directorio de Proveedores")
             
+            # Formulario para CREAR nuevo proveedor
+            with st.expander("➕ Agregar un Nuevo Proveedor"):
+                with st.form("form_nuevo_proveedor", clear_on_submit=True):
+                    nuevo_nombre = st.text_input("Nombre del Proveedor (Ej. Molino Central)")
+                    nuevo_producto = st.text_input("Producto o Servicio (Ej. Harina)")
+                    if st.form_submit_button("Guardar Proveedor"):
+                        if nuevo_nombre:
+                            with conn.session as s:
+                                s.execute(text("INSERT INTO proveedores (nombre, producto_servicio) VALUES (:n, :p)"), 
+                                          {"n": nuevo_nombre, "p": nuevo_producto})
+                                s.commit()
+                            st.success(f"✅ ¡Proveedor '{nuevo_nombre}' agregado con éxito!")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Escribe al menos el nombre del proveedor.")
+            
+            st.markdown("---")
+            st.markdown("### Editar o Eliminar Proveedores Existentes")
+            df_prov_edit = conn.query("SELECT id, nombre, producto_servicio FROM proveedores ORDER BY id", ttl=0)
+            
+            if not df_prov_edit.empty:
+                # Tabla interactiva para editar nombres y productos directamente
+                proveedores_editados = st.data_editor(
+                    df_prov_edit,
+                    column_config={
+                        "id": st.column_config.NumberColumn("ID", disabled=True),
+                        "nombre": st.column_config.TextColumn("Nombre del Proveedor", required=True),
+                        "producto_servicio": st.column_config.TextColumn("Insumo / Producto")
+                    },
+                    hide_index=True,
+                    use_container_width=True,
+                    key="editor_proveedores"
+                )
+                
+                if st.button("💾 Guardar Cambios en Proveedores", type="primary"):
+                    with conn.session as s:
+                        for index, row in proveedores_editados.iterrows():
+                            s.execute(text("""
+                                UPDATE proveedores 
+                                SET nombre = :nombre, producto_servicio = :prod 
+                                WHERE id = :id
+                            """), {
+                                "nombre": row["nombre"],
+                                "prod": row["producto_servicio"],
+                                "id": int(row["id"])
+                            })
+                        s.commit()
+                    st.success("✅ ¡Proveedores actualizados correctamente!")
+                    st.rerun()
+                
+                st.markdown("---")
+                st.markdown("### 🗑️ Eliminar Proveedor")
+                prov_a_borrar = st.selectbox("Selecciona el proveedor que deseas eliminar:", df_prov_edit['nombre'])
+                if st.button("Eliminar Proveedor Seleccionado", type="secondary"):
+                    id_borrar = df_prov_edit.loc[df_prov_edit['nombre'] == prov_a_borrar, 'id'].values[0]
+                    with conn.session as s:
+                        # Borramos primero las cuentas por pagar asociadas para evitar errores de relación
+                        s.execute(text("DELETE FROM cuentas_por_pagar WHERE proveedor_id = :id"), {"id": int(id_borrar)})
+                        s.execute(text("DELETE FROM proveedores WHERE id = :id"), {"id": int(id_borrar)})
+                        s.commit()
+                    st.success(f"🗑️ Proveedor '{prov_a_borrar}' eliminado del sistema.")
+                    st.rerun()
+            else:
+                st.info("No hay proveedores registrados todavía.")
+
+        # --- SUBMÓDULO 2: REGISTRAR NUEVA CUENTA POR PAGAR ---
+        with tab_prov2:
+            st.subheader("Registrar Factura o Crédito")
+            df_proveedores = conn.query("SELECT id, nombre FROM proveedores ORDER BY nombre", ttl=0)
+            
+            if not df_proveedores.empty:
+                with st.form("form_credito", clear_on_submit=True):
+                    prov = st.selectbox("Seleccionar Proveedor", df_proveedores['nombre'])
+                    num_factura = st.text_input("📄 No. de Factura o Documento (Ej. FAC-12345)")
+                    monto_credito = st.number_input("Monto total de la deuda (Q)", min_value=0.00, step=100.00)
+                    fecha_vencimiento = st.date_input("¿Cuándo toca pagar?", get_fecha_guate(), format="DD/MM/YYYY")
+                    
+                    if st.form_submit_button("Guardar Deuda"):
+                        prov_id = df_proveedores.loc[df_proveedores['nombre'] == prov, 'id'].values[0]
+                        with conn.session as s:
+                            s.execute(text("""
+                                INSERT INTO cuentas_por_pagar (proveedor_id, num_documento, fecha_compra, fecha_vencimiento, monto_total, saldo_pendiente) 
+                                VALUES (:p, :doc, :f_compra, :f_vence, :monto, :saldo)
+                            """), {
+                                "p": int(prov_id), 
+                                "doc": num_factura, 
+                                "f_compra": get_fecha_guate(), 
+                                "f_vence": fecha_vencimiento, 
+                                "monto": monto_credito, 
+                                "saldo": monto_credito
+                            })
+                            s.commit()
+                        st.success("✅ Deuda registrada correctamente.")
+            else:
+                st.warning("⚠️ Primero debes registrar al menos un proveedor en la pestaña 'Gestionar Proveedores'.")
+
+        # --- SUBMÓDULO 3: DEUDAS ACTIVAS ---
+        with tab_prov3:
+            st.subheader("Listado de Cuentas por Pagar")
+            deudas_activas = conn.query("""
+                SELECT c.id as ID, p.nombre as Proveedor, c.num_documento as Documento, p.producto_servicio as Insumo, 
+                       c.fecha_vencimiento as Vencimiento, c.saldo_pendiente as Saldo 
+                FROM cuentas_por_pagar c 
+                JOIN proveedores p ON c.proveedor_id = p.id 
+                WHERE c.estado = 'Pendiente'
+            """, ttl=0)
+            
+            if not deudas_activas.empty:
+                deudas_activas['vencimiento'] = pd.to_datetime(deudas_activas['vencimiento']).dt.strftime('%d/%m/%Y')
+                st.dataframe(deudas_activas, use_container_width=True, hide_index=True)
+            else:
+                st.success("🎉 ¡Felicidades! No tienes deudas pendientes registradas.")
+                
     except Exception as e:
-        st.error("Error al cargar el módulo de proveedores.")
+        st.error(f"Error en el módulo de proveedores: {e}")
