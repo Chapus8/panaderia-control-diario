@@ -9,12 +9,31 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import io
-import re 
+import re
+import streamlit.components.v1 as components 
 
 # ==========================================
-# 1. CONFIGURACIÓN PRINCIPAL
+# 1. CONFIGURACIÓN PRINCIPAL Y ESCUDO DE TECLADO
 # ==========================================
 st.set_page_config(page_title="Panadería Judith - Sistema", page_icon="🍞", layout="wide")
+
+# Escudo invisible para evitar que atajos como "C" o "R" interrumpan tu escritura
+components.html(
+    """
+    <script>
+    const doc = window.parent.document;
+    doc.addEventListener('keydown', function(e) {
+        if ((e.key.toLowerCase() === 'c' || e.key.toLowerCase() === 'r') && 
+            e.target.nodeName !== 'INPUT' && 
+            e.target.nodeName !== 'TEXTAREA') {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+    }, true);
+    </script>
+    """,
+    height=0, width=0
+)
 
 USUARIOS = {
     "roberto": "esquipulas123", 
@@ -228,11 +247,13 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("### 💸 Detalle de Gastos")
     st.caption("✨ **Escribe todo rápido usando el teclado (Tab y Enter).** Cuando termines, presiona el botón Mágico de abajo.")
     
+    # Creamos el molde inicial vacío en la sesión
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
         for _ in range(11): 
             st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
 
+    # Mostramos la tabla. ¡La clave "tabla_gastos" y evitar sobreescribir constantemente evita el rebote!
     gastos_editados = st.data_editor(
         st.session_state.gastos_df,
         column_config={
@@ -241,25 +262,27 @@ if opcion_menu == "📝 Registro de Corte":
             "Monto (Q)": st.column_config.NumberColumn("Total (Q)", min_value=0.0, format="Q %.2f")
         },
         num_rows="dynamic",
-        use_container_width=True
+        use_container_width=True,
+        key="tabla_gastos" 
     )
-    
-    # Mantenemos la tabla en la memoria sincronizada con lo que escribes
-    st.session_state.gastos_df = gastos_editados
 
-    # EL BOTÓN MÁGICO PARA LLENAR TODO DE UN GOLPE
+    # BOTÓN PARA AUTOCOMPLETAR CATEGORÍAS (Se aplica a lo que acabas de escribir)
     if st.button("✨ Autocompletar Categorías Vacías", type="secondary"):
+        df_temp = gastos_editados.copy()
         hubo_cambios = False
-        for i, row in st.session_state.gastos_df.iterrows():
+        
+        for i, row in df_temp.iterrows():
             detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else ""
             categoria = row["Categoría"]
             
             if detalle != "" and (pd.isna(categoria) or categoria is None or str(categoria).strip() == ""):
-                st.session_state.gastos_df.at[i, "Categoría"] = autocompletar_categoria(detalle)
+                df_temp.at[i, "Categoría"] = autocompletar_categoria(detalle)
                 hubo_cambios = True
         
         if hubo_cambios:
-            st.rerun() # Aquí sí recargamos la página, porque ya terminaste de escribir
+            # Solo si tocaste el botón y hubo cambios reales mandamos a recargar
+            st.session_state.gastos_df = df_temp
+            st.rerun()
     
     st.markdown("---")
     st.markdown("### 💰 Resumen de Ingresos")
@@ -297,7 +320,7 @@ if opcion_menu == "📝 Registro de Corte":
                         detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else "Gasto sin detalle"
                         categoria = row["Categoría"]
                         
-                        # Si se te olvidó darle al botón mágico, el sistema lo hace aquí por seguridad
+                        # Por si olvidó presionar Autocompletar, lo hacemos antes de guardar a la BD
                         if pd.isna(categoria) or categoria is None or str(categoria).strip() == "":
                             categoria = autocompletar_categoria(detalle)
                             gastos_editados.at[index, "Categoría"] = categoria
@@ -315,9 +338,13 @@ if opcion_menu == "📝 Registro de Corte":
             st.session_state['pdf_generado'] = pdf_buffer
             st.session_state['pdf_nombre'] = f"Corte_{fecha_corte.strftime('%d-%m-%Y')}.pdf"
             
-            st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
+            # Limpiamos la tabla
+            df_limpio = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
             for _ in range(11):
-                st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
+                df_limpio.loc[len(df_limpio)] = [None, "", 0.0]
+            st.session_state.gastos_df = df_limpio
+            st.rerun()
+            
         else:
             st.warning("⚠️ Debes ingresar al menos una venta o un gasto para guardar.")
             
