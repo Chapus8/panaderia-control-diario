@@ -244,15 +244,14 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("### 💸 Detalle de Gastos")
     st.caption("✨ **Escribe todo rápido usando el teclado (Tab y Enter).** Cuando termines, presiona el botón Mágico de abajo.")
     
+    # === LLAVE MAESTRA PARA LIMPIAR TODO ===
+    if 'reset_key' not in st.session_state:
+        st.session_state.reset_key = 0
+
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
         for _ in range(11): 
             st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
-
-    # Variables de memoria para los montos de ingresos, así podemos limpiarlos
-    if 'venta_input' not in st.session_state: st.session_state.venta_input = 0.0
-    if 'pedidos_input' not in st.session_state: st.session_state.pedidos_input = 0.0
-    if 'trans_input' not in st.session_state: st.session_state.trans_input = 0.0
 
     gastos_editados = st.data_editor(
         st.session_state.gastos_df,
@@ -263,7 +262,7 @@ if opcion_menu == "📝 Registro de Corte":
         },
         num_rows="dynamic",
         use_container_width=True,
-        key="tabla_gastos" 
+        key=f"tabla_gastos_{st.session_state.reset_key}" # Llave dinámica para que renazca limpia
     )
 
     if st.button("✨ Autocompletar Categorías Vacías", type="secondary"):
@@ -286,10 +285,9 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("### 💰 Resumen de Ingresos")
     col_ing1, col_ing2, col_ing3 = st.columns(3)
     
-    # Entradas vinculadas a la sesión para poder reiniciarlas a 0
-    venta_mostrador = col_ing1.number_input("🍞 Venta (Efectivo)", min_value=0.00, step=50.00, key="venta_input")
-    pago_pedidos = col_ing2.number_input("🎂 Pedidos (Efectivo)", min_value=0.00, step=50.00, key="pedidos_input")
-    transferencias = col_ing3.number_input("📱 Transferencias (Fri/Depósitos)", min_value=0.00, step=50.00, key="trans_input")
+    venta_mostrador = col_ing1.number_input("🍞 Venta (Efectivo)", min_value=0.00, step=50.00, key=f"venta_input_{st.session_state.reset_key}")
+    pago_pedidos = col_ing2.number_input("🎂 Pedidos (Efectivo)", min_value=0.00, step=50.00, key=f"pedidos_input_{st.session_state.reset_key}")
+    transferencias = col_ing3.number_input("📱 Transferencias (Fri/Depósitos)", min_value=0.00, step=50.00, key=f"trans_input_{st.session_state.reset_key}")
     
     total_ingresos_efectivo = venta_mostrador + pago_pedidos
     total_ingresos_bruto = total_ingresos_efectivo + transferencias
@@ -308,7 +306,7 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("<br>", unsafe_allow_html=True)
     
     # ---------------------------------------------
-    # BOTONES DE ACCIÓN PRINCIPAL (GUARDAR Y LIMPIAR)
+    # BOTONES DE ACCIÓN PRINCIPAL
     # ---------------------------------------------
     col_btn1, col_btn2 = st.columns(2)
     
@@ -318,21 +316,23 @@ if opcion_menu == "📝 Registro de Corte":
     with col_btn2:
         btn_limpiar = st.button("🧹 Limpiar / Nuevo Corte", type="secondary", use_container_width=True)
 
-    # ACCIÓN DEL BOTÓN LIMPIAR
+    # LÓGICA DEL BOTÓN LIMPIAR
     if btn_limpiar:
         df_limpio = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
         for _ in range(11):
             df_limpio.loc[len(df_limpio)] = [None, "", 0.0]
         st.session_state.gastos_df = df_limpio
-        st.session_state.venta_input = 0.0
-        st.session_state.pedidos_input = 0.0
-        st.session_state.trans_input = 0.0
+        
+        # Aumentamos la llave maestra para forzar la creación de celdas y cuadros en blanco
+        st.session_state.reset_key += 1
+        
         if 'pdf_generado' in st.session_state:
             del st.session_state['pdf_generado']
             del st.session_state['pdf_nombre']
+            
         st.rerun()
 
-    # ACCIÓN DEL BOTÓN GUARDAR
+    # LÓGICA DEL BOTÓN GUARDAR
     if btn_guardar:
         if total_ingresos_bruto > 0 or total_gastos_calc > 0:
             corte_id = obtener_o_crear_corte(fecha_corte)
@@ -366,14 +366,13 @@ if opcion_menu == "📝 Registro de Corte":
             st.session_state['pdf_generado'] = pdf_buffer
             st.session_state['pdf_nombre'] = f"Corte_{fecha_corte.strftime('%d-%m-%Y')}.pdf"
             
-            # Limpiamos la tabla y casillas para el siguiente ingreso
             df_limpio = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
             for _ in range(11):
                 df_limpio.loc[len(df_limpio)] = [None, "", 0.0]
             st.session_state.gastos_df = df_limpio
-            st.session_state.venta_input = 0.0
-            st.session_state.pedidos_input = 0.0
-            st.session_state.trans_input = 0.0
+            
+            # Aumentamos la llave maestra aquí también para limpiar todo después de guardar
+            st.session_state.reset_key += 1
             st.rerun()
             
         else:
