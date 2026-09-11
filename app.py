@@ -9,6 +9,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import io
+import re # ¡NUEVA LIBRERÍA PARA HACER MÁS INTELIGENTE EL AUTOCOMPLETADO!
 
 # ==========================================
 # 1. CONFIGURACIÓN PRINCIPAL
@@ -53,7 +54,6 @@ if not st.session_state['logueado']:
 # 3. CONEXIÓN A BASE DE DATOS Y FUNCIONES
 # ==========================================
 try:
-    # EL ESCUDO: pool_pre_ping=True verifica que Neon esté despierto antes de consultarlo
     conn = st.connection("postgresql", type="sql", pool_pre_ping=True)
 except Exception as e:
     st.error("🔴 Error de conexión con la base de datos.")
@@ -69,25 +69,37 @@ def obtener_o_crear_corte(fecha_corte):
             s.commit()
             return s.execute(text("SELECT id FROM cortes_diarios WHERE fecha = :fecha"), {"fecha": fecha_corte}).fetchone()[0]
 
+# --- CEREBRO INTELIGENTE DE AUTOCOMPLETADO MEJORADO ---
 def autocompletar_categoria(detalle):
     d = str(detalle).lower()
-    if any(x in d for x in ['harina', 'azucar', 'azúcar', 'manteca', 'levadura', 'leche', 'huevo', 'huevos', 'sal']):
-        return 'MATERIA PRIMA'
-    elif any(x in d for x in ['bono', 'sueldo', 'pago', 'salario', 'anticipo', 'almuerzo', 'planilla', 'turno', 'quincena']):
-        return 'SUELDOS Y SALARIOS'
-    elif any(x in d for x in ['gasolina', 'moto', 'vehiculo', 'repuesto', 'llanta', 'aceite', 'mecanico', 'pinchazo']):
-        return 'REPUESTOS Y REPARACIONES'
-    elif any(x in d for x in ['bolsa', 'bandeja', 'calcomania', 'papel', 'limpieza', 'empaque', 'escoba', 'jabon', 'cloro']):
-        return 'UTILES Y EMPAQUES'
-    elif any(x in d for x in ['prestamo', 'tarjeta', 'interes', 'abono', 'banco', 'cuota']):
-        return 'PRESTAMOS E INTERESES'
-    elif any(x in d for x in ['pasta', 'pollo']):
+    
+    # 1. Reglas de alta prioridad (frases compuestas o palabras exactas)
+    if 'pasta' in d or 'pollo' in d:
         return 'COMPRAS DE PASTA DE POLLO'
-    elif any(x in d for x in ['bebida', 'dulce', 'tostada', 'marquesote', 'agua', 'gaseosa', 'coca']):
+        
+    if 'bolsa de agua' in d or 'agua' in d or 'gaseosa' in d or 'coca' in d or 'bebida' in d or 'tostada' in d or 'marquesote' in d:
         return 'OTRAS MERCADERIAS'
-    elif any(x in d for x in ['gas ', 'propano', 'luz', 'internet', 'telefono', 'alquiler', 'impuesto', 'basura']):
-        return 'OTROS GASTOS'
-    return 'OTROS GASTOS' 
+        
+    if 'luz' in d or 'internet' in d or 'telefono' in d or 'basura' in d or 'alquiler' in d or 'impuesto' in d or 'gas ' in d or 'propano' in d:
+        return 'OTROS GASTOS' 
+        
+    # 2. Búsqueda de palabras exactas (\b evita que "sal" active "salarios")
+    if re.search(r'\b(harina|azucar|azúcar|manteca|levadura|leche|huevo|huevos|sal)\b', d):
+        return 'MATERIA PRIMA'
+        
+    if re.search(r'\b(bono|sueldo|sueldos|salario|salarios|anticipo|almuerzo|planilla|turno|quincena|panadero)\b', d):
+        return 'SUELDOS Y SALARIOS'
+        
+    if re.search(r'\b(gasolina|moto|vehiculo|repuesto|llanta|aceite|mecanico|pinchazo)\b', d):
+        return 'REPUESTOS Y REPARACIONES'
+        
+    if re.search(r'\b(bolsa|bandeja|calcomania|papel|limpieza|empaque|escoba|jabon|cloro)\b', d):
+        return 'UTILES Y EMPAQUES'
+        
+    if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota)\b', d):
+        return 'PRESTAMOS E INTERESES'
+
+    return 'OTROS GASTOS' # Si no encuentra nada, lo manda acá por defecto
 
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mostrador, pago_pedidos):
     buffer = io.BytesIO()
@@ -207,7 +219,6 @@ if opcion_menu == "📝 Registro de Corte":
     st.title("🍞 Ingreso Diario de Corte")
     st.markdown("### 📋 Datos del Corte")
     
-    # Intento seguro de leer las tablas
     try:
         df_rutas = conn.query("SELECT id, nombre FROM rutas_locales", ttl=0)
         df_categorias = conn.query("SELECT id, nombre FROM categorias_gasto", ttl=0)
