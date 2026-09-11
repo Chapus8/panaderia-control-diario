@@ -163,7 +163,6 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_ef
     elements.append(t_gastos)
     elements.append(Spacer(1, 15))
     
-    # Nuevos cálculos para separar Fri/Depósitos del Efectivo
     efectivo_ingresado = venta_efectivo + pago_pedidos
     total_ingresos_brutos = efectivo_ingresado + transferencias
     neto_efectivo = efectivo_ingresado - total_gastos
@@ -250,6 +249,11 @@ if opcion_menu == "📝 Registro de Corte":
         for _ in range(11): 
             st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
 
+    # Variables de memoria para los montos de ingresos, así podemos limpiarlos
+    if 'venta_input' not in st.session_state: st.session_state.venta_input = 0.0
+    if 'pedidos_input' not in st.session_state: st.session_state.pedidos_input = 0.0
+    if 'trans_input' not in st.session_state: st.session_state.trans_input = 0.0
+
     gastos_editados = st.data_editor(
         st.session_state.gastos_df,
         column_config={
@@ -282,9 +286,10 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("### 💰 Resumen de Ingresos")
     col_ing1, col_ing2, col_ing3 = st.columns(3)
     
-    venta_mostrador = col_ing1.number_input("🍞 Venta (Efectivo)", min_value=0.00, step=50.00)
-    pago_pedidos = col_ing2.number_input("🎂 Pedidos (Efectivo)", min_value=0.00, step=50.00)
-    transferencias = col_ing3.number_input("📱 Transferencias (Fri/Depósitos)", min_value=0.00, step=50.00)
+    # Entradas vinculadas a la sesión para poder reiniciarlas a 0
+    venta_mostrador = col_ing1.number_input("🍞 Venta (Efectivo)", min_value=0.00, step=50.00, key="venta_input")
+    pago_pedidos = col_ing2.number_input("🎂 Pedidos (Efectivo)", min_value=0.00, step=50.00, key="pedidos_input")
+    transferencias = col_ing3.number_input("📱 Transferencias (Fri/Depósitos)", min_value=0.00, step=50.00, key="trans_input")
     
     total_ingresos_efectivo = venta_mostrador + pago_pedidos
     total_ingresos_bruto = total_ingresos_efectivo + transferencias
@@ -302,7 +307,33 @@ if opcion_menu == "📝 Registro de Corte":
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    if st.button("💾 Guardar Corte Completo", type="primary", use_container_width=True):
+    # ---------------------------------------------
+    # BOTONES DE ACCIÓN PRINCIPAL (GUARDAR Y LIMPIAR)
+    # ---------------------------------------------
+    col_btn1, col_btn2 = st.columns(2)
+    
+    with col_btn1:
+        btn_guardar = st.button("💾 Guardar Corte Completo", type="primary", use_container_width=True)
+    
+    with col_btn2:
+        btn_limpiar = st.button("🧹 Limpiar / Nuevo Corte", type="secondary", use_container_width=True)
+
+    # ACCIÓN DEL BOTÓN LIMPIAR
+    if btn_limpiar:
+        df_limpio = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
+        for _ in range(11):
+            df_limpio.loc[len(df_limpio)] = [None, "", 0.0]
+        st.session_state.gastos_df = df_limpio
+        st.session_state.venta_input = 0.0
+        st.session_state.pedidos_input = 0.0
+        st.session_state.trans_input = 0.0
+        if 'pdf_generado' in st.session_state:
+            del st.session_state['pdf_generado']
+            del st.session_state['pdf_nombre']
+        st.rerun()
+
+    # ACCIÓN DEL BOTÓN GUARDAR
+    if btn_guardar:
         if total_ingresos_bruto > 0 or total_gastos_calc > 0:
             corte_id = obtener_o_crear_corte(fecha_corte)
             ruta_id = df_rutas.loc[df_rutas['nombre'] == local_ruta, 'id'].values[0]
@@ -335,10 +366,14 @@ if opcion_menu == "📝 Registro de Corte":
             st.session_state['pdf_generado'] = pdf_buffer
             st.session_state['pdf_nombre'] = f"Corte_{fecha_corte.strftime('%d-%m-%Y')}.pdf"
             
+            # Limpiamos la tabla y casillas para el siguiente ingreso
             df_limpio = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
             for _ in range(11):
                 df_limpio.loc[len(df_limpio)] = [None, "", 0.0]
             st.session_state.gastos_df = df_limpio
+            st.session_state.venta_input = 0.0
+            st.session_state.pedidos_input = 0.0
+            st.session_state.trans_input = 0.0
             st.rerun()
             
         else:
@@ -413,7 +448,6 @@ elif opcion_menu == "📅 Historial de Cortes":
             with col_t1:
                 st.subheader("💰 Desglose de Ingresos")
                 if not ingresos_hist.empty:
-                    # Ocultamos la columna transferencias en la tabla si todo es 0 para limpieza
                     st.dataframe(ingresos_hist, use_container_width=True, hide_index=True)
                 else:
                     st.info("No se registraron ingresos este día.")
