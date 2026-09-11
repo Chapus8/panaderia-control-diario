@@ -226,7 +226,7 @@ if opcion_menu == "📝 Registro de Corte":
     
     st.markdown("---")
     st.markdown("### 💸 Detalle de Gastos")
-    st.caption("✨ **Escribe el detalle y presiona 'Enter'.** ¡El sistema llenará la categoría por ti al instante!")
+    st.caption("✨ **Escribe todo rápido usando el teclado (Tab y Enter).** Cuando termines, presiona el botón Mágico de abajo.")
     
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
@@ -237,28 +237,29 @@ if opcion_menu == "📝 Registro de Corte":
         st.session_state.gastos_df,
         column_config={
             "Categoría": st.column_config.SelectboxColumn("Tipo de Gasto (Automático)", options=lista_categorias, required=False),
-            "Detalle": st.column_config.TextColumn("Detalle (Escribe y presiona Enter)"),
+            "Detalle": st.column_config.TextColumn("Detalle del gasto"),
             "Monto (Q)": st.column_config.NumberColumn("Total (Q)", min_value=0.0, format="Q %.2f")
         },
         num_rows="dynamic",
         use_container_width=True
     )
     
-    hubo_cambios = False
-    for i, row in gastos_editados.iterrows():
-        detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else ""
-        categoria = row["Categoría"]
-        
-        if detalle != "" and (pd.isna(categoria) or categoria is None or str(categoria).strip() == ""):
-            nueva_cat = autocompletar_categoria(detalle)
-            gastos_editados.at[i, "Categoría"] = nueva_cat
-            hubo_cambios = True
+    # Mantenemos la tabla en la memoria sincronizada con lo que escribes
+    st.session_state.gastos_df = gastos_editados
 
-    # Corrección clave: Solo reasignamos y recargamos si el autocompletado actuó. 
-    # Esto elimina el rebote molesto al borrar manualmente.
-    if hubo_cambios:
-        st.session_state.gastos_df = gastos_editados
-        st.rerun()
+    # EL BOTÓN MÁGICO PARA LLENAR TODO DE UN GOLPE
+    if st.button("✨ Autocompletar Categorías Vacías", type="secondary"):
+        hubo_cambios = False
+        for i, row in st.session_state.gastos_df.iterrows():
+            detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else ""
+            categoria = row["Categoría"]
+            
+            if detalle != "" and (pd.isna(categoria) or categoria is None or str(categoria).strip() == ""):
+                st.session_state.gastos_df.at[i, "Categoría"] = autocompletar_categoria(detalle)
+                hubo_cambios = True
+        
+        if hubo_cambios:
+            st.rerun() # Aquí sí recargamos la página, porque ya terminaste de escribir
     
     st.markdown("---")
     st.markdown("### 💰 Resumen de Ingresos")
@@ -294,8 +295,13 @@ if opcion_menu == "📝 Registro de Corte":
                     monto = row["Monto (Q)"]
                     if monto > 0:
                         detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else "Gasto sin detalle"
-                        categoria = row["Categoría"] if pd.notna(row["Categoría"]) else "OTROS GASTOS"
+                        categoria = row["Categoría"]
                         
+                        # Si se te olvidó darle al botón mágico, el sistema lo hace aquí por seguridad
+                        if pd.isna(categoria) or categoria is None or str(categoria).strip() == "":
+                            categoria = autocompletar_categoria(detalle)
+                            gastos_editados.at[index, "Categoría"] = categoria
+                            
                         if categoria in lista_categorias:
                             cat_id = df_categorias.loc[df_categorias['nombre'] == categoria, 'id'].values[0]
                             s.execute(text("INSERT INTO gastos (corte_id, categoria_id, detalle, monto) VALUES (:c, :cat, :d, :m)"), 
