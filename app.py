@@ -17,7 +17,6 @@ import streamlit.components.v1 as components
 # ==========================================
 st.set_page_config(page_title="Panadería Judith - Sistema", page_icon="🍞", layout="wide")
 
-# Escudo invisible para evitar que atajos como "C" o "R" interrumpan tu escritura
 components.html(
     """
     <script>
@@ -88,17 +87,14 @@ def obtener_o_crear_corte(fecha_corte):
             s.commit()
             return s.execute(text("SELECT id FROM cortes_diarios WHERE fecha = :fecha"), {"fecha": fecha_corte}).fetchone()[0]
 
-# --- CEREBRO INTELIGENTE DE AUTOCOMPLETADO ---
 def autocompletar_categoria(detalle):
     d = str(detalle).lower()
-    
     if 'pasta' in d or 'pollo' in d:
         return 'COMPRAS DE PASTA DE POLLO'
     if 'bolsa de agua' in d or 'agua' in d or 'gaseosa' in d or 'coca' in d or 'bebida' in d or 'tostada' in d or 'marquesote' in d:
         return 'OTRAS MERCADERIAS'
     if 'luz' in d or 'internet' in d or 'telefono' in d or 'basura' in d or 'alquiler' in d or 'impuesto' in d or 'gas ' in d or 'propano' in d:
         return 'OTROS GASTOS' 
-        
     if re.search(r'\b(harina|azucar|azúcar|manteca|levadura|leche|huevo|huevos|sal)\b', d):
         return 'MATERIA PRIMA'
     if re.search(r'\b(bono|sueldo|sueldos|salario|salarios|anticipo|almuerzo|planilla|turno|quincena|panadero)\b', d):
@@ -109,10 +105,9 @@ def autocompletar_categoria(detalle):
         return 'UTILES Y EMPAQUES'
     if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota)\b', d):
         return 'PRESTAMOS E INTERESES'
-
     return 'OTROS GASTOS' 
 
-def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mostrador, pago_pedidos):
+def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_efectivo, pago_pedidos, transferencias):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
@@ -168,16 +163,19 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mo
     elements.append(t_gastos)
     elements.append(Spacer(1, 15))
     
-    total_ingresos = venta_mostrador + pago_pedidos
-    neto = total_ingresos - total_gastos
+    # Nuevos cálculos para separar Fri/Depósitos del Efectivo
+    efectivo_ingresado = venta_efectivo + pago_pedidos
+    total_ingresos_brutos = efectivo_ingresado + transferencias
+    neto_efectivo = efectivo_ingresado - total_gastos
     
     resumen_data = [
         ["RESUMEN FINANCIERO", "MONTO"],
-        ["Venta de Pan (Mostrador)", f"Q {venta_mostrador:.2f}"],
-        ["Pago de Pedidos / Abonos", f"Q {pago_pedidos:.2f}"],
-        ["TOTAL INGRESOS", f"Q {total_ingresos:.2f}"],
-        ["TOTAL GASTOS", f"Q {total_gastos:.2f}"],
-        ["SALDO NETO ENTREGADO", f"Q {neto:.2f}"]
+        ["Venta de Pan (Efectivo)", f"Q {venta_efectivo:.2f}"],
+        ["Pago de Pedidos (Efectivo)", f"Q {pago_pedidos:.2f}"],
+        ["Transferencias / Fri / Depósitos", f"Q {transferencias:.2f}"],
+        ["TOTAL INGRESOS BRUTOS", f"Q {total_ingresos_brutos:.2f}"],
+        ["TOTAL GASTOS (En efectivo)", f"Q {total_gastos:.2f}"],
+        ["EFECTIVO NETO A ENTREGAR", f"Q {neto_efectivo:.2f}"]
     ]
     
     t_resumen = Table(resumen_data, colWidths=[340, 200])
@@ -188,10 +186,10 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mo
         ('ALIGN', (1,0), (1,-1), 'RIGHT'),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
         ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-        ('BACKGROUND', (0,3), (-1,3), colors.HexColor("#EAECEE")),
-        ('BACKGROUND', (0,5), (-1,5), colors.HexColor("#D4EFDF")),
-        ('FONTNAME', (0,3), (-1,3), 'Helvetica-Bold'),
-        ('FONTNAME', (0,5), (-1,5), 'Helvetica-Bold'),
+        ('BACKGROUND', (0,4), (-1,4), colors.HexColor("#EAECEE")),
+        ('BACKGROUND', (0,6), (-1,6), colors.HexColor("#D4EFDF")),
+        ('FONTNAME', (0,4), (-1,4), 'Helvetica-Bold'),
+        ('FONTNAME', (0,6), (-1,6), 'Helvetica-Bold'),
     ]))
     elements.append(t_resumen)
     
@@ -247,13 +245,11 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("### 💸 Detalle de Gastos")
     st.caption("✨ **Escribe todo rápido usando el teclado (Tab y Enter).** Cuando termines, presiona el botón Mágico de abajo.")
     
-    # Creamos el molde inicial vacío en la sesión
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
         for _ in range(11): 
             st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
 
-    # Mostramos la tabla. ¡La clave "tabla_gastos" y evitar sobreescribir constantemente evita el rebote!
     gastos_editados = st.data_editor(
         st.session_state.gastos_df,
         column_config={
@@ -266,7 +262,6 @@ if opcion_menu == "📝 Registro de Corte":
         key="tabla_gastos" 
     )
 
-    # BOTÓN PARA AUTOCOMPLETAR CATEGORÍAS (Se aplica a lo que acabas de escribir)
     if st.button("✨ Autocompletar Categorías Vacías", type="secondary"):
         df_temp = gastos_editados.copy()
         hubo_cambios = False
@@ -280,7 +275,6 @@ if opcion_menu == "📝 Registro de Corte":
                 hubo_cambios = True
         
         if hubo_cambios:
-            # Solo si tocaste el botón y hubo cambios reales mandamos a recargar
             st.session_state.gastos_df = df_temp
             st.rerun()
     
@@ -288,31 +282,35 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("### 💰 Resumen de Ingresos")
     col_ing1, col_ing2, col_ing3 = st.columns(3)
     
-    venta_mostrador = col_ing1.number_input("🍞 Venta de Pan (Mostrador)", min_value=0.00, step=50.00)
-    pago_pedidos = col_ing2.number_input("🎂 Pago de Pedidos / Abonos", min_value=0.00, step=50.00)
+    venta_mostrador = col_ing1.number_input("🍞 Venta (Efectivo)", min_value=0.00, step=50.00)
+    pago_pedidos = col_ing2.number_input("🎂 Pedidos (Efectivo)", min_value=0.00, step=50.00)
+    transferencias = col_ing3.number_input("📱 Transferencias (Fri/Depósitos)", min_value=0.00, step=50.00)
     
-    total_ingresos = venta_mostrador + pago_pedidos
+    total_ingresos_efectivo = venta_mostrador + pago_pedidos
+    total_ingresos_bruto = total_ingresos_efectivo + transferencias
     total_gastos_calc = gastos_editados["Monto (Q)"].sum()
+    efectivo_a_entregar = total_ingresos_efectivo - total_gastos_calc
     
     st.markdown("---")
     st.markdown("### 📊 Cuadre Final")
-    col_tot1, col_tot2, col_tot3 = st.columns(3)
+    col_tot1, col_tot2, col_tot3, col_tot4 = st.columns(4)
     
-    col_tot1.metric("💵 Total Ingresos (Venta + Pedidos)", f"Q {total_ingresos:.2f}")
-    col_tot2.metric("📉 Suma Total de Gastos", f"Q {total_gastos_calc:.2f}")
-    col_tot3.metric("⚖️ Total Neto Entregado", f"Q {total_ingresos - total_gastos_calc:.2f}")
+    col_tot1.metric("💵 Ingresos (Efectivo)", f"Q {total_ingresos_efectivo:.2f}")
+    col_tot2.metric("📱 Fri / Depósitos", f"Q {transferencias:.2f}")
+    col_tot3.metric("📉 Gastos (Efectivo)", f"Q {total_gastos_calc:.2f}")
+    col_tot4.metric("⚖️ Efectivo Neto a Entregar", f"Q {efectivo_a_entregar:.2f}")
     
     st.markdown("<br>", unsafe_allow_html=True)
     
     if st.button("💾 Guardar Corte Completo", type="primary", use_container_width=True):
-        if total_ingresos > 0 or total_gastos_calc > 0:
+        if total_ingresos_bruto > 0 or total_gastos_calc > 0:
             corte_id = obtener_o_crear_corte(fecha_corte)
             ruta_id = df_rutas.loc[df_rutas['nombre'] == local_ruta, 'id'].values[0]
             
             with conn.session as s:
-                if total_ingresos > 0:
-                    s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total, credito_pagado) VALUES (:c, :r, :v, :cp)"), 
-                              {"c": corte_id, "r": int(ruta_id), "v": venta_mostrador, "cp": pago_pedidos})
+                if total_ingresos_bruto > 0:
+                    s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total, credito_pagado, transferencias) VALUES (:c, :r, :v, :cp, :t)"), 
+                              {"c": corte_id, "r": int(ruta_id), "v": venta_mostrador, "cp": pago_pedidos, "t": transferencias})
                 
                 for index, row in gastos_editados.iterrows():
                     monto = row["Monto (Q)"]
@@ -320,7 +318,6 @@ if opcion_menu == "📝 Registro de Corte":
                         detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else "Gasto sin detalle"
                         categoria = row["Categoría"]
                         
-                        # Por si olvidó presionar Autocompletar, lo hacemos antes de guardar a la BD
                         if pd.isna(categoria) or categoria is None or str(categoria).strip() == "":
                             categoria = autocompletar_categoria(detalle)
                             gastos_editados.at[index, "Categoría"] = categoria
@@ -334,11 +331,10 @@ if opcion_menu == "📝 Registro de Corte":
             st.success("✅ ¡Corte guardado y listo para imprimir!")
             st.balloons()
             
-            pdf_buffer = generar_pdf_corte(fecha_corte.strftime('%d/%m/%Y'), local_ruta, responsable, gastos_editados, venta_mostrador, pago_pedidos)
+            pdf_buffer = generar_pdf_corte(fecha_corte.strftime('%d/%m/%Y'), local_ruta, responsable, gastos_editados, venta_mostrador, pago_pedidos, transferencias)
             st.session_state['pdf_generado'] = pdf_buffer
             st.session_state['pdf_nombre'] = f"Corte_{fecha_corte.strftime('%d-%m-%Y')}.pdf"
             
-            # Limpiamos la tabla
             df_limpio = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
             for _ in range(11):
                 df_limpio.loc[len(df_limpio)] = [None, "", 0.0]
@@ -374,19 +370,23 @@ elif opcion_menu == "📅 Historial de Cortes":
         if not corte_data.empty:
             corte_id = corte_data.iloc[0]['id']
             
-            ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {corte_id}", ttl=0)
+            ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos, i.transferencias as transferencias FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {corte_id}", ttl=0)
             gastos_hist = conn.query(f"SELECT c.nombre as Categoria, g.detalle as Detalle, g.monto as Monto FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id WHERE g.corte_id = {corte_id}", ttl=0)
             
             sum_venta = ingresos_hist['venta_mostrador'].sum() if not ingresos_hist.empty else 0.0
             sum_pedidos = ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0.0
-            sum_ingresos = sum_venta + sum_pedidos
+            sum_transferencias = ingresos_hist['transferencias'].sum() if not ingresos_hist.empty and 'transferencias' in ingresos_hist.columns else 0.0
+            
+            sum_efectivo = sum_venta + sum_pedidos
             sum_gastos = gastos_hist['monto'].sum() if not gastos_hist.empty else 0.0
+            neto_efectivo = sum_efectivo - sum_gastos
             
             st.markdown(f"### Resumen del {fecha_consulta.strftime('%d/%m/%Y')}")
-            col_h1, col_h2, col_h3 = st.columns(3)
-            col_h1.metric("💵 Total Ingresado", f"Q {sum_ingresos:.2f}")
-            col_h2.metric("📉 Total Gastado", f"Q {sum_gastos:.2f}")
-            col_h3.metric("⚖️ Saldo Neto", f"Q {sum_ingresos - sum_gastos:.2f}")
+            col_h1, col_h2, col_h3, col_h4 = st.columns(4)
+            col_h1.metric("💵 Ingresos Efectivo", f"Q {sum_efectivo:.2f}")
+            col_h2.metric("📱 Transferencias/Fri", f"Q {sum_transferencias:.2f}")
+            col_h3.metric("📉 Gastos", f"Q {sum_gastos:.2f}")
+            col_h4.metric("⚖️ Efectivo Entregado", f"Q {neto_efectivo:.2f}")
             
             st.markdown("---")
             
@@ -397,7 +397,7 @@ elif opcion_menu == "📅 Historial de Cortes":
                 "Monto (Q)": gastos_hist['monto'] if not gastos_hist.empty else []
             })
             
-            pdf_historico = generar_pdf_corte(fecha_consulta.strftime('%d/%m/%Y'), ruta_nombre, "Histórico", df_para_pdf, sum_venta, sum_pedidos)
+            pdf_historico = generar_pdf_corte(fecha_consulta.strftime('%d/%m/%Y'), ruta_nombre, "Histórico", df_para_pdf, sum_venta, sum_pedidos, sum_transferencias)
             
             st.download_button(
                 label=f"📥 Descargar PDF del {fecha_consulta.strftime('%d/%m/%Y')} para Imprimir",
@@ -413,6 +413,7 @@ elif opcion_menu == "📅 Historial de Cortes":
             with col_t1:
                 st.subheader("💰 Desglose de Ingresos")
                 if not ingresos_hist.empty:
+                    # Ocultamos la columna transferencias en la tabla si todo es 0 para limpieza
                     st.dataframe(ingresos_hist, use_container_width=True, hide_index=True)
                 else:
                     st.info("No se registraron ingresos este día.")
@@ -462,7 +463,7 @@ elif opcion_menu == "📈 Estadísticas":
         gastos_totales = conn.query(query_gastos, params={"mes": mes_num, "anio": anio_seleccionado}, ttl=0)
         
         query_ingresos = """
-            SELECT SUM(i.venta_total + COALESCE(i.credito_pagado, 0)) as total_ingresos
+            SELECT SUM(i.venta_total + COALESCE(i.credito_pagado, 0) + COALESCE(i.transferencias, 0)) as total_ingresos
             FROM ingresos i
             JOIN cortes_diarios cd ON i.corte_id = cd.id
             WHERE EXTRACT(MONTH FROM cd.fecha) = :mes AND EXTRACT(YEAR FROM cd.fecha) = :anio
@@ -480,7 +481,7 @@ elif opcion_menu == "📈 Estadísticas":
         
         st.markdown("---")
         col_s1, col_s2, col_s3 = st.columns(3)
-        col_s1.metric(f"💵 Ingresos ({mes_seleccionado})", f"Q {total_i:.2f}")
+        col_s1.metric(f"💵 Ingresos Brutos ({mes_seleccionado})", f"Q {total_i:.2f}")
         col_s2.metric(f"📉 Gastos ({mes_seleccionado})", f"Q {total_g:.2f}")
         col_s3.metric(f"⚖️ Utilidad Bruta", f"Q {utilidad:.2f}")
         st.markdown("---")
