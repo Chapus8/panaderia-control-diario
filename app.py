@@ -4,8 +4,6 @@ from sqlalchemy import text
 from datetime import datetime
 import pytz
 import plotly.express as px
-
-# Librerías para generar el PDF
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -73,23 +71,23 @@ def obtener_o_crear_corte(fecha_corte):
 # --- FUNCIÓN MAGICA DE AUTOCOMPLETADO ---
 def autocompletar_categoria(detalle):
     d = str(detalle).lower()
-    if any(x in d for x in ['harina', 'azucar', 'azúcar', 'manteca', 'levadura', 'leche', 'huevo', 'huevos']):
+    if any(x in d for x in ['harina', 'azucar', 'azúcar', 'manteca', 'levadura', 'leche', 'huevo', 'huevos', 'sal']):
         return 'MATERIA PRIMA'
-    elif any(x in d for x in ['bono', 'sueldo', 'pago', 'salario', 'anticipo', 'almuerzo', 'planilla', 'turno']):
+    elif any(x in d for x in ['bono', 'sueldo', 'pago', 'salario', 'anticipo', 'almuerzo', 'planilla', 'turno', 'quincena']):
         return 'SUELDOS Y SALARIOS'
-    elif any(x in d for x in ['gasolina', 'moto', 'vehiculo', 'repuesto', 'llanta', 'aceite', 'mecanico']):
+    elif any(x in d for x in ['gasolina', 'moto', 'vehiculo', 'repuesto', 'llanta', 'aceite', 'mecanico', 'pinchazo']):
         return 'REPUESTOS Y REPARACIONES'
-    elif any(x in d for x in ['bolsa', 'bandeja', 'calcomania', 'papel', 'limpieza', 'empaque', 'escoba', 'jabon']):
+    elif any(x in d for x in ['bolsa', 'bandeja', 'calcomania', 'papel', 'limpieza', 'empaque', 'escoba', 'jabon', 'cloro']):
         return 'UTILES Y EMPAQUES'
     elif any(x in d for x in ['prestamo', 'tarjeta', 'interes', 'abono', 'banco', 'cuota']):
         return 'PRESTAMOS E INTERESES'
     elif any(x in d for x in ['pasta', 'pollo']):
         return 'COMPRAS DE PASTA DE POLLO'
-    elif any(x in d for x in ['bebida', 'dulce', 'tostada', 'marquesote', 'agua', 'gaseosa']):
+    elif any(x in d for x in ['bebida', 'dulce', 'tostada', 'marquesote', 'agua', 'gaseosa', 'coca']):
         return 'OTRAS MERCADERIAS'
     elif any(x in d for x in ['gas ', 'propano', 'luz', 'internet', 'telefono', 'alquiler', 'impuesto', 'basura']):
         return 'OTROS GASTOS'
-    return 'OTROS GASTOS' # Categoría por defecto si no reconoce la palabra
+    return 'OTROS GASTOS' # Categoría por defecto
 
 # --- FUNCIÓN PARA GENERAR EL PDF TAMAÑO CARTA ---
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mostrador, pago_pedidos):
@@ -123,7 +121,6 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mo
     total_gastos = 0.0
     
     for index, row in df_gastos.iterrows():
-        # Aquí verificamos si hay monto para incluirlo en el PDF, la categoría ya viene autocompletada
         if row["Monto (Q)"] > 0:
             categoria_mostrar = row["Categoría"] if pd.notna(row["Categoría"]) else "OTROS GASTOS"
             gastos_table_data.append([str(categoria_mostrar), str(row["Detalle"]), f"Q {row['Monto (Q)']:.2f}"])
@@ -222,24 +219,48 @@ if opcion_menu == "📝 Registro de Corte":
     
     st.markdown("---")
     st.markdown("### 💸 Detalle de Gastos")
-    st.caption("✨ **Truco:** Deja la columna 'Tipo de Gasto' en blanco. ¡El sistema leerá tu detalle y lo asignará automáticamente al guardar!")
+    st.caption("✨ **Escribe el detalle y presiona 'Enter'.** ¡El sistema llenará la categoría por ti al instante!")
     
+    # Preparamos la tabla en la memoria
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
         for _ in range(11): 
             st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
 
-    # Aquí quitamos el required=True para que puedas dejarlo en blanco
+    # Mostramos la tabla interactiva
     gastos_editados = st.data_editor(
         st.session_state.gastos_df,
         column_config={
-            "Categoría": st.column_config.SelectboxColumn("Tipo de Gasto (Opcional)", options=lista_categorias, required=False),
-            "Detalle": st.column_config.TextColumn("Detalle (Ej. Bono Dania, Huevos)"),
+            "Categoría": st.column_config.SelectboxColumn("Tipo de Gasto (Automático)", options=lista_categorias, required=False),
+            "Detalle": st.column_config.TextColumn("Detalle (Escribe y presiona Enter)"),
             "Monto (Q)": st.column_config.NumberColumn("Total (Q)", min_value=0.0, format="Q %.2f")
         },
         num_rows="dynamic",
         use_container_width=True
     )
+    
+    # -------------------------------------------------------------
+    # MAGIA EN TIEMPO REAL: Analizamos si el usuario escribió algo nuevo
+    # -------------------------------------------------------------
+    hubo_cambios = False
+    for i, row in gastos_editados.iterrows():
+        detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else ""
+        categoria = row["Categoría"]
+        
+        # Si hay un detalle escrito, pero la categoría está vacía
+        if detalle != "" and (pd.isna(categoria) or categoria is None or str(categoria).strip() == ""):
+            nueva_cat = autocompletar_categoria(detalle)
+            gastos_editados.at[i, "Categoría"] = nueva_cat
+            hubo_cambios = True
+
+    # Si la magia actuó, actualizamos la memoria y forzamos a redibujar la pantalla
+    if hubo_cambios:
+        st.session_state.gastos_df = gastos_editados
+        st.rerun()
+    else:
+        # Siempre mantenemos la memoria sincronizada con lo que ves en pantalla
+        st.session_state.gastos_df = gastos_editados
+    # -------------------------------------------------------------
     
     st.markdown("---")
     st.markdown("### 💰 Resumen de Ingresos")
@@ -271,19 +292,12 @@ if opcion_menu == "📝 Registro de Corte":
                     s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total, credito_pagado) VALUES (:c, :r, :v, :cp)"), 
                               {"c": corte_id, "r": int(ruta_id), "v": venta_mostrador, "cp": pago_pedidos})
                 
-                # Procesamos y autocompletamos los gastos
                 for index, row in gastos_editados.iterrows():
                     monto = row["Monto (Q)"]
                     if monto > 0:
                         detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else "Gasto sin detalle"
-                        categoria = row["Categoría"]
+                        categoria = row["Categoría"] if pd.notna(row["Categoría"]) else "OTROS GASTOS"
                         
-                        # Si está vacía, aplicamos la magia
-                        if pd.isna(categoria) or categoria is None or categoria == "":
-                            categoria = autocompletar_categoria(detalle)
-                            gastos_editados.at[index, "Categoría"] = categoria
-                        
-                        # Insertamos a la base de datos
                         if categoria in lista_categorias:
                             cat_id = df_categorias.loc[df_categorias['nombre'] == categoria, 'id'].values[0]
                             s.execute(text("INSERT INTO gastos (corte_id, categoria_id, detalle, monto) VALUES (:c, :cat, :d, :m)"), 
@@ -293,7 +307,6 @@ if opcion_menu == "📝 Registro de Corte":
             st.success("✅ ¡Corte guardado y listo para imprimir!")
             st.balloons()
             
-            # Generar el PDF con los datos ya autocompletados
             pdf_buffer = generar_pdf_corte(fecha_corte.strftime('%d/%m/%Y'), local_ruta, responsable, gastos_editados, venta_mostrador, pago_pedidos)
             st.session_state['pdf_generado'] = pdf_buffer
             st.session_state['pdf_nombre'] = f"Corte_{fecha_corte.strftime('%d-%m-%Y')}.pdf"
@@ -316,7 +329,7 @@ if opcion_menu == "📝 Registro de Corte":
         )
 
 # ------------------------------------------
-# MÓDULO 2: HISTORIAL DE CORTES
+# MÓDULO 2, 3 Y 4 SE MANTIENEN EXACTAMENTE IGUAL
 # ------------------------------------------
 elif opcion_menu == "📅 Historial de Cortes":
     st.title("📅 Consulta de Historial e Impresión")
@@ -385,9 +398,6 @@ elif opcion_menu == "📅 Historial de Cortes":
     except Exception as e:
         st.error("Error al consultar el historial.")
 
-# ------------------------------------------
-# MÓDULO 3: ESTADÍSTICAS
-# ------------------------------------------
 elif opcion_menu == "📈 Estadísticas":
     st.title("📈 Visualización de Finanzas")
     st.write("Mira en qué se está yendo el dinero.")
@@ -401,16 +411,12 @@ elif opcion_menu == "📈 Estadísticas":
     except Exception as e:
         st.info("📊 Esperando datos...")
 
-# ------------------------------------------
-# MÓDULO 4: PROVEEDORES
-# ------------------------------------------
 elif opcion_menu == "💳 Proveedores":
     st.title("💳 Control de Créditos y Proveedores")
     
     try:
         tab_prov1, tab_prov2, tab_prov3 = st.tabs(["📋 Gestionar Proveedores", "➕ Registrar Deuda", "🚨 Deudas Activas"])
         
-        # --- SUBMÓDULO 1: GESTIONAR PROVEEDORES ---
         with tab_prov1:
             st.subheader("Administrar Directorio de Proveedores")
             
@@ -476,7 +482,6 @@ elif opcion_menu == "💳 Proveedores":
             else:
                 st.info("No hay proveedores registrados todavía.")
 
-        # --- SUBMÓDULO 2: REGISTRAR NUEVA DEUDA ---
         with tab_prov2:
             st.subheader("Registrar Factura o Crédito")
             df_proveedores = conn.query("SELECT id, nombre FROM proveedores ORDER BY nombre", ttl=0)
@@ -507,7 +512,6 @@ elif opcion_menu == "💳 Proveedores":
             else:
                 st.warning("⚠️ Primero debes registrar al menos un proveedor en la pestaña 'Gestionar Proveedores'.")
 
-        # --- SUBMÓDULO 3: DEUDAS ACTIVAS CON SEMÁFORO ---
         with tab_prov3:
             st.subheader("Listado de Cuentas por Pagar")
             deudas_activas = conn.query("""
