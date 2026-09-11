@@ -53,7 +53,8 @@ if not st.session_state['logueado']:
 # 3. CONEXIÓN A BASE DE DATOS Y FUNCIONES
 # ==========================================
 try:
-    conn = st.connection("postgresql", type="sql")
+    # EL ESCUDO: pool_pre_ping=True verifica que Neon esté despierto antes de consultarlo
+    conn = st.connection("postgresql", type="sql", pool_pre_ping=True)
 except Exception as e:
     st.error("🔴 Error de conexión con la base de datos.")
     st.stop()
@@ -206,9 +207,14 @@ if opcion_menu == "📝 Registro de Corte":
     st.title("🍞 Ingreso Diario de Corte")
     st.markdown("### 📋 Datos del Corte")
     
-    df_rutas = conn.query("SELECT id, nombre FROM rutas_locales", ttl=0)
-    df_categorias = conn.query("SELECT id, nombre FROM categorias_gasto", ttl=0)
-    lista_categorias = df_categorias['nombre'].tolist()
+    # Intento seguro de leer las tablas
+    try:
+        df_rutas = conn.query("SELECT id, nombre FROM rutas_locales", ttl=0)
+        df_categorias = conn.query("SELECT id, nombre FROM categorias_gasto", ttl=0)
+        lista_categorias = df_categorias['nombre'].tolist()
+    except Exception as e:
+        st.error("⚠️ La base de datos está inactiva o faltan las tablas principales. Refresca la página.")
+        st.stop()
     
     col_enc1, col_enc2, col_enc3 = st.columns(3)
     fecha_corte = col_enc1.date_input("Fecha del Corte", get_fecha_guate(), format="DD/MM/YYYY")
@@ -388,13 +394,12 @@ elif opcion_menu == "📅 Historial de Cortes":
         st.error("Error al consultar el historial.")
 
 # ------------------------------------------
-# MÓDULO 3: ESTADÍSTICAS (Ahora con Filtros por Mes)
+# MÓDULO 3: ESTADÍSTICAS
 # ------------------------------------------
 elif opcion_menu == "📈 Estadísticas":
     st.title("📈 Estadísticas y Finanzas")
     st.write("Filtra tus movimientos por mes para analizar el rendimiento del negocio.")
     
-    # Selectores de fecha
     meses_dict = {
         "Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, 
         "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12
@@ -410,7 +415,6 @@ elif opcion_menu == "📈 Estadísticas":
     mes_num = meses_dict[mes_seleccionado]
     
     try:
-        # Consulta de gastos filtrados por mes y año
         query_gastos = """
             SELECT c.nombre as categoria, SUM(g.monto) as total 
             FROM gastos g 
@@ -421,7 +425,6 @@ elif opcion_menu == "📈 Estadísticas":
         """
         gastos_totales = conn.query(query_gastos, params={"mes": mes_num, "anio": anio_seleccionado}, ttl=0)
         
-        # Consulta de ingresos filtrados por mes y año
         query_ingresos = """
             SELECT SUM(i.venta_total + COALESCE(i.credito_pagado, 0)) as total_ingresos
             FROM ingresos i
@@ -430,10 +433,8 @@ elif opcion_menu == "📈 Estadísticas":
         """
         ingresos_totales = conn.query(query_ingresos, params={"mes": mes_num, "anio": anio_seleccionado}, ttl=0)
         
-        # Procesamos los totales para las métricas
         total_g = gastos_totales['total'].sum() if not gastos_totales.empty else 0.0
         
-        # Extraemos el valor del ingreso, asegurándonos de que no venga vacío (None)
         if not ingresos_totales.empty and pd.notna(ingresos_totales.iloc[0]['total_ingresos']):
             total_i = float(ingresos_totales.iloc[0]['total_ingresos'])
         else:
@@ -441,7 +442,6 @@ elif opcion_menu == "📈 Estadísticas":
             
         utilidad = total_i - total_g
         
-        # Mostramos las tarjetas de métricas del mes
         st.markdown("---")
         col_s1, col_s2, col_s3 = st.columns(3)
         col_s1.metric(f"💵 Ingresos ({mes_seleccionado})", f"Q {total_i:.2f}")
@@ -449,7 +449,6 @@ elif opcion_menu == "📈 Estadísticas":
         col_s3.metric(f"⚖️ Utilidad Bruta", f"Q {utilidad:.2f}")
         st.markdown("---")
         
-        # Gráfica de pastel de los gastos
         if not gastos_totales.empty and total_g > 0:
             fig = px.pie(gastos_totales, values='total', names='categoria', hole=0.4, title=f"Distribución de Gastos - {mes_seleccionado} {anio_seleccionado}")
             st.plotly_chart(fig, use_container_width=True)
