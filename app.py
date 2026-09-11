@@ -9,7 +9,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import io
-import re # ¡NUEVA LIBRERÍA PARA HACER MÁS INTELIGENTE EL AUTOCOMPLETADO!
+import re 
 
 # ==========================================
 # 1. CONFIGURACIÓN PRINCIPAL
@@ -69,11 +69,10 @@ def obtener_o_crear_corte(fecha_corte):
             s.commit()
             return s.execute(text("SELECT id FROM cortes_diarios WHERE fecha = :fecha"), {"fecha": fecha_corte}).fetchone()[0]
 
-# --- CEREBRO INTELIGENTE DE AUTOCOMPLETADO MEJORADO ---
+# --- CEREBRO INTELIGENTE DE AUTOCOMPLETADO ---
 def autocompletar_categoria(detalle):
     d = str(detalle).lower()
     
-    # 1. Reglas de alta prioridad (frases compuestas o palabras exactas)
     if 'pasta' in d or 'pollo' in d:
         return 'COMPRAS DE PASTA DE POLLO'
         
@@ -83,7 +82,6 @@ def autocompletar_categoria(detalle):
     if 'luz' in d or 'internet' in d or 'telefono' in d or 'basura' in d or 'alquiler' in d or 'impuesto' in d or 'gas ' in d or 'propano' in d:
         return 'OTROS GASTOS' 
         
-    # 2. Búsqueda de palabras exactas (\b evita que "sal" active "salarios")
     if re.search(r'\b(harina|azucar|azúcar|manteca|levadura|leche|huevo|huevos|sal)\b', d):
         return 'MATERIA PRIMA'
         
@@ -99,7 +97,7 @@ def autocompletar_categoria(detalle):
     if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota)\b', d):
         return 'PRESTAMOS E INTERESES'
 
-    return 'OTROS GASTOS' # Si no encuentra nada, lo manda acá por defecto
+    return 'OTROS GASTOS' 
 
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mostrador, pago_pedidos):
     buffer = io.BytesIO()
@@ -220,8 +218,9 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("### 📋 Datos del Corte")
     
     try:
-        df_rutas = conn.query("SELECT id, nombre FROM rutas_locales", ttl=0)
-        df_categorias = conn.query("SELECT id, nombre FROM categorias_gasto", ttl=0)
+        # AQUI ESTÁ EL CACHÉ (ttl=600 segundos = 10 minutos guardado en memoria rápida)
+        df_rutas = conn.query("SELECT id, nombre FROM rutas_locales", ttl=600)
+        df_categorias = conn.query("SELECT id, nombre FROM categorias_gasto", ttl=600)
         lista_categorias = df_categorias['nombre'].tolist()
     except Exception as e:
         st.error("⚠️ La base de datos está inactiva o faltan las tablas principales. Refresca la página.")
