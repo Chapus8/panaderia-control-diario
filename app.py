@@ -68,7 +68,6 @@ def obtener_o_crear_corte(fecha_corte):
             s.commit()
             return s.execute(text("SELECT id FROM cortes_diarios WHERE fecha = :fecha"), {"fecha": fecha_corte}).fetchone()[0]
 
-# --- FUNCIÓN MAGICA DE AUTOCOMPLETADO ---
 def autocompletar_categoria(detalle):
     d = str(detalle).lower()
     if any(x in d for x in ['harina', 'azucar', 'azúcar', 'manteca', 'levadura', 'leche', 'huevo', 'huevos', 'sal']):
@@ -87,9 +86,8 @@ def autocompletar_categoria(detalle):
         return 'OTRAS MERCADERIAS'
     elif any(x in d for x in ['gas ', 'propano', 'luz', 'internet', 'telefono', 'alquiler', 'impuesto', 'basura']):
         return 'OTROS GASTOS'
-    return 'OTROS GASTOS' # Categoría por defecto
+    return 'OTROS GASTOS' 
 
-# --- FUNCIÓN PARA GENERAR EL PDF TAMAÑO CARTA ---
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_mostrador, pago_pedidos):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -221,13 +219,11 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("### 💸 Detalle de Gastos")
     st.caption("✨ **Escribe el detalle y presiona 'Enter'.** ¡El sistema llenará la categoría por ti al instante!")
     
-    # Preparamos la tabla en la memoria
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
         for _ in range(11): 
             st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
 
-    # Mostramos la tabla interactiva
     gastos_editados = st.data_editor(
         st.session_state.gastos_df,
         column_config={
@@ -239,28 +235,21 @@ if opcion_menu == "📝 Registro de Corte":
         use_container_width=True
     )
     
-    # -------------------------------------------------------------
-    # MAGIA EN TIEMPO REAL: Analizamos si el usuario escribió algo nuevo
-    # -------------------------------------------------------------
     hubo_cambios = False
     for i, row in gastos_editados.iterrows():
         detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else ""
         categoria = row["Categoría"]
         
-        # Si hay un detalle escrito, pero la categoría está vacía
         if detalle != "" and (pd.isna(categoria) or categoria is None or str(categoria).strip() == ""):
             nueva_cat = autocompletar_categoria(detalle)
             gastos_editados.at[i, "Categoría"] = nueva_cat
             hubo_cambios = True
 
-    # Si la magia actuó, actualizamos la memoria y forzamos a redibujar la pantalla
     if hubo_cambios:
         st.session_state.gastos_df = gastos_editados
         st.rerun()
     else:
-        # Siempre mantenemos la memoria sincronizada con lo que ves en pantalla
         st.session_state.gastos_df = gastos_editados
-    # -------------------------------------------------------------
     
     st.markdown("---")
     st.markdown("### 💰 Resumen de Ingresos")
@@ -329,7 +318,7 @@ if opcion_menu == "📝 Registro de Corte":
         )
 
 # ------------------------------------------
-# MÓDULO 2, 3 Y 4 SE MANTIENEN EXACTAMENTE IGUAL
+# MÓDULO 2: HISTORIAL DE CORTES
 # ------------------------------------------
 elif opcion_menu == "📅 Historial de Cortes":
     st.title("📅 Consulta de Historial e Impresión")
@@ -398,19 +387,81 @@ elif opcion_menu == "📅 Historial de Cortes":
     except Exception as e:
         st.error("Error al consultar el historial.")
 
+# ------------------------------------------
+# MÓDULO 3: ESTADÍSTICAS (Ahora con Filtros por Mes)
+# ------------------------------------------
 elif opcion_menu == "📈 Estadísticas":
-    st.title("📈 Visualización de Finanzas")
-    st.write("Mira en qué se está yendo el dinero.")
+    st.title("📈 Estadísticas y Finanzas")
+    st.write("Filtra tus movimientos por mes para analizar el rendimiento del negocio.")
+    
+    # Selectores de fecha
+    meses_dict = {
+        "Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, 
+        "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12
+    }
+    
+    hoy = get_fecha_guate()
+    nombre_mes_actual = list(meses_dict.keys())[list(meses_dict.values()).index(hoy.month)]
+    
+    col_f1, col_f2 = st.columns(2)
+    mes_seleccionado = col_f1.selectbox("Selecciona el Mes", list(meses_dict.keys()), index=list(meses_dict.keys()).index(nombre_mes_actual))
+    anio_seleccionado = col_f2.selectbox("Selecciona el Año", [hoy.year - 1, hoy.year, hoy.year + 1], index=1)
+    
+    mes_num = meses_dict[mes_seleccionado]
+    
     try:
-        gastos_totales = conn.query("SELECT c.nombre as categoria, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id GROUP BY c.nombre", ttl=0)
-        if not gastos_totales.empty and gastos_totales['total'].sum() > 0:
-            fig = px.pie(gastos_totales, values='total', names='categoria', hole=0.4, title="Distribución Histórica de Gastos")
+        # Consulta de gastos filtrados por mes y año
+        query_gastos = """
+            SELECT c.nombre as categoria, SUM(g.monto) as total 
+            FROM gastos g 
+            JOIN categorias_gasto c ON g.categoria_id = c.id 
+            JOIN cortes_diarios cd ON g.corte_id = cd.id
+            WHERE EXTRACT(MONTH FROM cd.fecha) = :mes AND EXTRACT(YEAR FROM cd.fecha) = :anio
+            GROUP BY c.nombre
+        """
+        gastos_totales = conn.query(query_gastos, params={"mes": mes_num, "anio": anio_seleccionado}, ttl=0)
+        
+        # Consulta de ingresos filtrados por mes y año
+        query_ingresos = """
+            SELECT SUM(i.venta_total + COALESCE(i.credito_pagado, 0)) as total_ingresos
+            FROM ingresos i
+            JOIN cortes_diarios cd ON i.corte_id = cd.id
+            WHERE EXTRACT(MONTH FROM cd.fecha) = :mes AND EXTRACT(YEAR FROM cd.fecha) = :anio
+        """
+        ingresos_totales = conn.query(query_ingresos, params={"mes": mes_num, "anio": anio_seleccionado}, ttl=0)
+        
+        # Procesamos los totales para las métricas
+        total_g = gastos_totales['total'].sum() if not gastos_totales.empty else 0.0
+        
+        # Extraemos el valor del ingreso, asegurándonos de que no venga vacío (None)
+        if not ingresos_totales.empty and pd.notna(ingresos_totales.iloc[0]['total_ingresos']):
+            total_i = float(ingresos_totales.iloc[0]['total_ingresos'])
+        else:
+            total_i = 0.0
+            
+        utilidad = total_i - total_g
+        
+        # Mostramos las tarjetas de métricas del mes
+        st.markdown("---")
+        col_s1, col_s2, col_s3 = st.columns(3)
+        col_s1.metric(f"💵 Ingresos ({mes_seleccionado})", f"Q {total_i:.2f}")
+        col_s2.metric(f"📉 Gastos ({mes_seleccionado})", f"Q {total_g:.2f}")
+        col_s3.metric(f"⚖️ Utilidad Bruta", f"Q {utilidad:.2f}")
+        st.markdown("---")
+        
+        # Gráfica de pastel de los gastos
+        if not gastos_totales.empty and total_g > 0:
+            fig = px.pie(gastos_totales, values='total', names='categoria', hole=0.4, title=f"Distribución de Gastos - {mes_seleccionado} {anio_seleccionado}")
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("📊 Aún no hay suficientes datos para generar la gráfica.")
+            st.info(f"📊 No hay gastos registrados para el mes de {mes_seleccionado} {anio_seleccionado}.")
+            
     except Exception as e:
-        st.info("📊 Esperando datos...")
+        st.error(f"Error al cargar las estadísticas: {e}")
 
+# ------------------------------------------
+# MÓDULO 4: PROVEEDORES
+# ------------------------------------------
 elif opcion_menu == "💳 Proveedores":
     st.title("💳 Control de Créditos y Proveedores")
     
