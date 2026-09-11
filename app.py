@@ -75,25 +75,19 @@ def autocompletar_categoria(detalle):
     
     if 'pasta' in d or 'pollo' in d:
         return 'COMPRAS DE PASTA DE POLLO'
-        
     if 'bolsa de agua' in d or 'agua' in d or 'gaseosa' in d or 'coca' in d or 'bebida' in d or 'tostada' in d or 'marquesote' in d:
         return 'OTRAS MERCADERIAS'
-        
     if 'luz' in d or 'internet' in d or 'telefono' in d or 'basura' in d or 'alquiler' in d or 'impuesto' in d or 'gas ' in d or 'propano' in d:
         return 'OTROS GASTOS' 
         
     if re.search(r'\b(harina|azucar|azúcar|manteca|levadura|leche|huevo|huevos|sal)\b', d):
         return 'MATERIA PRIMA'
-        
     if re.search(r'\b(bono|sueldo|sueldos|salario|salarios|anticipo|almuerzo|planilla|turno|quincena|panadero)\b', d):
         return 'SUELDOS Y SALARIOS'
-        
     if re.search(r'\b(gasolina|moto|vehiculo|repuesto|llanta|aceite|mecanico|pinchazo)\b', d):
         return 'REPUESTOS Y REPARACIONES'
-        
     if re.search(r'\b(bolsa|bandeja|calcomania|papel|limpieza|empaque|escoba|jabon|cloro)\b', d):
         return 'UTILES Y EMPAQUES'
-        
     if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota)\b', d):
         return 'PRESTAMOS E INTERESES'
 
@@ -218,7 +212,6 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("### 📋 Datos del Corte")
     
     try:
-        # AQUI ESTÁ EL CACHÉ (ttl=600 segundos = 10 minutos guardado en memoria rápida)
         df_rutas = conn.query("SELECT id, nombre FROM rutas_locales", ttl=600)
         df_categorias = conn.query("SELECT id, nombre FROM categorias_gasto", ttl=600)
         lista_categorias = df_categorias['nombre'].tolist()
@@ -261,11 +254,11 @@ if opcion_menu == "📝 Registro de Corte":
             gastos_editados.at[i, "Categoría"] = nueva_cat
             hubo_cambios = True
 
+    # Corrección clave: Solo reasignamos y recargamos si el autocompletado actuó. 
+    # Esto elimina el rebote molesto al borrar manualmente.
     if hubo_cambios:
         st.session_state.gastos_df = gastos_editados
         st.rerun()
-    else:
-        st.session_state.gastos_df = gastos_editados
     
     st.markdown("---")
     st.markdown("### 💰 Resumen de Ingresos")
