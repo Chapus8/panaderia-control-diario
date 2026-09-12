@@ -10,7 +10,6 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.charts.piecharts import Pie
-# NUEVAS LIBRERÍAS PARA LA GRÁFICA DE BARRAS EN EL PDF
 from reportlab.graphics.charts.barcharts import VerticalBarChart
 from reportlab.graphics.charts.legends import Legend
 import io
@@ -104,7 +103,7 @@ def autocompletar_categoria(detalle):
     if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota)\b', d): return 'PRESTAMOS E INTERESES'
     return 'OTROS GASTOS' 
 
-# -- FUNCIONES PDF (Corte, Comparativa, Mensual) --
+# -- FUNCIONES PDF (Corte, Comparativa, Mensual, Estrellas) --
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_efectivo, pago_pedidos, transferencias):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -263,12 +262,10 @@ def generar_pdf_comparativa_diaria(f_inicio, f_fin, df_resumen, t_ing, t_gas, t_
     subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray)
     h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
     
-    # ENCABEZADO
     elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style))
     elements.append(Paragraph(f"REPORTE COMPARATIVO DIARIO: {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", subtitle_style))
     elements.append(Spacer(1, 15))
     
-    # RESUMEN GLOBAL
     resumen_data = [["TOTAL INGRESOS", "TOTAL GASTOS", "UTILIDAD NETA"], [f"Q {t_ing:,.2f}", f"Q {t_gas:,.2f}", f"Q {t_uti:,.2f}"]]
     t_resumen = Table(resumen_data, colWidths=[150, 150, 150])
     t_resumen.setStyle(TableStyle([
@@ -279,48 +276,30 @@ def generar_pdf_comparativa_diaria(f_inicio, f_fin, df_resumen, t_ing, t_gas, t_
     elements.append(t_resumen)
     elements.append(Spacer(1, 20))
     
-    # LA NUEVA GRÁFICA DE BARRAS NATIVA
     elements.append(Paragraph("<b>Gráfica Comparativa: Ingresos vs Gastos</b>", h2_style))
-    
     d = Drawing(480, 200)
     bc = VerticalBarChart()
-    bc.x = 40
-    bc.y = 40
-    bc.height = 140
-    bc.width = 420
-    
-    # Pasamos los datos
-    lista_ingresos = df_resumen['ingresos'].tolist()
-    lista_gastos = df_resumen['gastos'].tolist()
-    bc.data = [lista_ingresos, lista_gastos]
-    
-    # Personalización visual de la gráfica
+    bc.x = 40; bc.y = 40; bc.height = 140; bc.width = 420
+    bc.data = [df_resumen['ingresos'].tolist(), df_resumen['gastos'].tolist()]
     bc.strokeColor = colors.white
     bc.valueAxis.valueMin = 0
     bc.categoryAxis.categoryNames = [fecha.strftime('%d/%m') for fecha in df_resumen['fecha']]
-    bc.categoryAxis.labels.angle = 45  # Inclinamos las fechas para que no choquen
+    bc.categoryAxis.labels.angle = 45 
     bc.categoryAxis.labels.dy = -10
     bc.categoryAxis.labels.fontSize = 8
-    
-    # Colores: Verde para Ingresos, Rojo para Gastos
     bc.bars[0].fillColor = colors.HexColor("#27AE60") 
     bc.bars[1].fillColor = colors.HexColor("#E74C3C") 
     
-    # Leyenda
     leg = Legend()
-    leg.x = 350
-    leg.y = 180
-    leg.alignment = 'right'
+    leg.x = 350; leg.y = 180; leg.alignment = 'right'
     leg.colorNamePairs = [(colors.HexColor("#27AE60"), 'Total Ingresos'), (colors.HexColor("#E74C3C"), 'Total Gastos')]
     leg.fontSize = 8
     leg.boxAnchor = 'nw'
     
-    d.add(bc)
-    d.add(leg)
+    d.add(bc); d.add(leg)
     elements.append(d)
     elements.append(Spacer(1, 20))
     
-    # TABLA DE DETALLE DIARIO
     elements.append(Paragraph("<b>Detalle Diario de Movimientos</b>", h2_style))
     det_data = [["FECHA", "TOTAL INGRESOS", "TOTAL GASTOS", "UTILIDAD NETA"]]
     for index, row in df_resumen.iterrows():
@@ -332,11 +311,67 @@ def generar_pdf_comparativa_diaria(f_inicio, f_fin, df_resumen, t_ing, t_gas, t_
         ('ALIGN', (1,0), (-1,-1), 'RIGHT'), ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
     ]))
     elements.append(t_det)
-    
     doc.build(elements)
     buffer.seek(0)
     return buffer
 
+def generar_pdf_dias_estrella(f_inicio, f_fin, df_agrupado, mejor_dia, peor_dia, prom_gral, dia_record):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    elements = []
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50"))
+    subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray)
+    h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
+    
+    elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style))
+    elements.append(Paragraph(f"REPORTE DE DÍAS ESTRELLA: {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", subtitle_style))
+    elements.append(Spacer(1, 15))
+    
+    metricas_data = [
+        ["MEJOR DÍA", "DÍA MÁS FLOJO", "PROMEDIO DIARIO", "DÍA RÉCORD"],
+        [str(mejor_dia), str(peor_dia), f"Q {prom_gral:,.2f}", f"{dia_record['fecha'].strftime('%d/%m/%Y')} (Q {dia_record['ingresos']:,.2f})"]
+    ]
+    t_metricas = Table(metricas_data, colWidths=[120, 120, 130, 150])
+    t_metricas.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold'),
+    ]))
+    elements.append(t_metricas)
+    elements.append(Spacer(1, 20))
+    
+    elements.append(Paragraph("<b>Gráfica de Rendimiento por Día de la Semana</b>", h2_style))
+    d = Drawing(480, 200)
+    bc = VerticalBarChart()
+    bc.x = 40; bc.y = 40; bc.height = 140; bc.width = 420
+    bc.data = [df_agrupado['promedio_ventas'].tolist()]
+    bc.strokeColor = colors.white
+    bc.valueAxis.valueMin = 0
+    bc.categoryAxis.categoryNames = df_agrupado['nombre_dia'].tolist()
+    bc.categoryAxis.labels.dy = -10
+    bc.categoryAxis.labels.fontSize = 9
+    bc.bars[0].fillColor = colors.HexColor("#27AE60") 
+    d.add(bc)
+    elements.append(d)
+    elements.append(Spacer(1, 20))
+    
+    elements.append(Paragraph("<b>Tabla de Promedios Diarios</b>", h2_style))
+    det_data = [["DÍA DE LA SEMANA", "PROMEDIO DE INGRESOS"]]
+    for index, row in df_agrupado.iterrows():
+        det_data.append([str(row['nombre_dia']), f"Q {row['promedio_ventas']:,.2f}"])
+        
+    t_det = Table(det_data, colWidths=[200, 200])
+    t_det.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#34495E")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('ALIGN', (0,0), (0,-1), 'CENTER'),
+        ('ALIGN', (1,0), (-1,-1), 'RIGHT'), ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+    ]))
+    elements.append(t_det)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
 
 # ==========================================
 # 4. MENÚ LATERAL (SIDEBAR)
@@ -525,6 +560,30 @@ elif opcion_menu == "📅 Historial de Cortes":
             col_h3.metric("📉 Gastos", f"Q {sum_gastos:.2f}")
             col_h4.metric("⚖️ Efectivo Entregado", f"Q {neto_efectivo:.2f}")
             
+            # --- NUEVA FUNCIÓN PARA CORREGIR INGRESOS ATRASADOS ---
+            st.markdown("---")
+            with st.expander("✏️ Corregir Ingresos de este Día"):
+                with st.form("form_corregir_ingresos"):
+                    st.warning("Usa esta opción si se te olvidó registrar alguna venta, efectivo o transferencia en este día.")
+                    col_e1, col_e2, col_e3 = st.columns(3)
+                    nuevo_efectivo = col_e1.number_input("🍞 Venta (Efectivo)", value=float(sum_venta), min_value=0.0, step=50.0)
+                    nuevo_pedidos = col_e2.number_input("🎂 Pedidos (Efectivo)", value=float(sum_pedidos), min_value=0.0, step=50.0)
+                    nuevo_trans = col_e3.number_input("📱 Transferencias (Fri/Depósitos)", value=float(sum_transferencias), min_value=0.0, step=50.0)
+                    
+                    if st.form_submit_button("💾 Guardar Corrección"):
+                        with conn.session as s:
+                            existe = s.execute(text("SELECT id FROM ingresos WHERE corte_id = :cid"), {"cid": int(corte_id)}).fetchone()
+                            if existe:
+                                s.execute(text("UPDATE ingresos SET venta_total = :v, credito_pagado = :p, transferencias = :t WHERE corte_id = :cid"), 
+                                          {"v": nuevo_efectivo, "p": nuevo_pedidos, "t": nuevo_trans, "cid": int(corte_id)})
+                            else:
+                                ruta_default = s.execute(text("SELECT id FROM rutas_locales LIMIT 1")).fetchone()[0]
+                                s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total, credito_pagado, transferencias) VALUES (:c, :r, :v, :cp, :t)"), 
+                                          {"c": int(corte_id), "r": ruta_default, "v": nuevo_efectivo, "cp": nuevo_pedidos, "t": nuevo_trans})
+                            s.commit()
+                        st.success("✅ ¡Ingresos corregidos exitosamente!")
+                        st.rerun()
+            
             st.markdown("---")
             ruta_nombre = ingresos_hist.iloc[0]['ruta'] if not ingresos_hist.empty else "LOCAL MERCADO"
             df_para_pdf = pd.DataFrame({"Categoría": gastos_hist['categoria'] if not gastos_hist.empty else [], "Detalle": gastos_hist['detalle'] if not gastos_hist.empty else [], "Monto (Q)": gastos_hist['monto'] if not gastos_hist.empty else []})
@@ -694,6 +753,17 @@ elif opcion_menu == "🏆 Días Estrella":
 
                     st.subheader("📋 Tabla de Promedios")
                     st.dataframe(df_agrupado, column_config={"nombre_dia": "Día de la Semana", "promedio_ventas": st.column_config.NumberColumn("Promedio de Ingresos", format="Q %.2f")}, hide_index=True, use_container_width=True)
+                    
+                    st.markdown("---")
+                    pdf_estrellas = generar_pdf_dias_estrella(fecha_inicio_est, fecha_fin_est, df_agrupado, mejor_dia_nombre, peor_dia_nombre, promedio_general, dia_record)
+                    st.download_button(
+                        label="📥 Descargar Análisis en PDF",
+                        data=pdf_estrellas,
+                        file_name=f"Dias_Estrella_{fecha_inicio_est.strftime('%d-%m-%Y')}_al_{fecha_fin_est.strftime('%d-%m-%Y')}.pdf",
+                        mime="application/pdf",
+                        type="secondary",
+                        use_container_width=True
+                    )
                     
             except Exception as e:
                 st.error(f"Error al cargar el análisis: {e}")
