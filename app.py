@@ -962,11 +962,48 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
             st.session_state.planilla_df = df_base
             
         st.caption("Escribe las **Libras** en las casillas. Si hizo pasta, anótalo en la última columna.")
+        
+        # --- BOTONES DE GUARDADO TEMPORAL ---
+        st.markdown("### 💾 Guardado de Seguridad")
+        col_b1, col_b2 = st.columns(2)
+        if col_b1.button("Guardar Avance (Borrador)", use_container_width=True):
+            datos_json = st.session_state.planilla_df.to_json(orient='records')
+            try:
+                with conn.session as s:
+                    s.execute(text("""
+                        INSERT INTO borrador_planilla (id, datos) VALUES (1, :d) 
+                        ON CONFLICT (id) DO UPDATE SET datos = :d
+                    """), {"d": datos_json})
+                    s.commit()
+                st.success("¡Avance guardado a salvo en la base de datos!")
+            except Exception as e:
+                st.error("⚠️ Falta crear la tabla borrador_planilla (Ejecuta el código SQL).")
+            
+        if col_b2.button("Recuperar Avance Guardado", use_container_width=True):
+            try:
+                with conn.session as s:
+                    resultado = s.execute(text("SELECT datos FROM borrador_planilla WHERE id = 1")).fetchone()
+                    if resultado and resultado[0]:
+                        df_recuperado = pd.read_json(io.StringIO(resultado[0]), orient='records')
+                        st.session_state.planilla_df = df_recuperado
+                        st.success("Avance recuperado con éxito.")
+                        st.rerun()
+                    else:
+                        st.warning("No hay ningún borrador guardado.")
+            except Exception as e:
+                st.error("⚠️ Falta crear la tabla borrador_planilla (Ejecuta el código SQL).")
+                
+        st.markdown("<br>", unsafe_allow_html=True)
+        # ----------------------------------------
+        
         config_columnas = {"Producto": st.column_config.TextColumn("🍞 Producto", disabled=True)}
         for d in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo', 'Libras Pasta']:
             config_columnas[d] = st.column_config.NumberColumn(d, min_value=0.0, format="%.2f")
         
         planilla_editada = st.data_editor(st.session_state.planilla_df, hide_index=True, column_config=config_columnas, use_container_width=True, height=600)
+        
+        # Para que el borrador funcione bien con las sumas dinámicas, guardamos lo editado en la memoria normal
+        st.session_state.planilla_df = planilla_editada
         
         st.markdown("---")
         st.markdown("### 🧮 Subtotal de Producción")
@@ -1034,7 +1071,7 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
                     st.success("✅ ¡Recibo guardado en el historial y listo para imprimir!")
                     st.download_button(label="📥 Descargar Recibo para Firma", data=pdf_recibo, file_name=f"Recibo_Pago_{panadero_nombre}_{numero_recibo}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
                 except Exception as e:
-                    st.error(f"⚠️ Error de base de datos: {e}")
+                    st.error(f"⚠️ Error al guardar el recibo. Asegúrate de haber ejecutado el SQL. Detalle: {e}")
             else:
                 st.warning("El total a pagar no puede ser cero. Revisa tu planilla primero.")
                 
@@ -1097,7 +1134,7 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
             else:
                 st.info("Aún no has guardado ningún recibo de pago en el sistema.")
         except Exception as e:
-            st.error(f"⚠️ Error de base de datos: {e}")
+            st.error("Esperando a que guardes el primer recibo en el sistema.")
 
 # ------------------------------------------
 # MÓDULO 6: REPORTE PDF MENSUAL
