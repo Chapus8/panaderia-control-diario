@@ -935,8 +935,6 @@ elif opcion_menu == "💳 Proveedores":
 # ------------------------------------------
 elif opcion_menu == "👨‍🍳 Planilla Panaderos":
     st.title("👨‍🍳 Control de Producción y Recibos")
-    
-    # --- AHORA SON 3 PESTAÑAS ---
     tab_planilla, tab_recibo, tab_historial_recibos = st.tabs(["📝 1. Calcular Planilla (Detalle)", "🧾 2. Emitir Recibo de Pago", "🗄️ 3. Historial de Recibos"])
     
     with tab_planilla:
@@ -1016,7 +1014,6 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
         st.markdown(f"<h3 style='text-align: center; color: #27AE60;'>Total a Pagar: Q {total_final_pagar:,.2f}</h3>", unsafe_allow_html=True)
         st.markdown("---")
         
-        # --- AQUÍ SE GUARDA EN LA BASE DE DATOS Y SE GENERA EL PDF ---
         if st.button("💾 Guardar y Emitir Recibo Oficial", type="primary", use_container_width=True):
             if total_final_pagar > 0:
                 try:
@@ -1037,11 +1034,10 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
                     st.success("✅ ¡Recibo guardado en el historial y listo para imprimir!")
                     st.download_button(label="📥 Descargar Recibo para Firma", data=pdf_recibo, file_name=f"Recibo_Pago_{panadero_nombre}_{numero_recibo}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
                 except Exception as e:
-                    st.error("⚠️ Falta crear la tabla en la base de datos (Ejecuta el código SQL que te di).")
+                    st.error(f"⚠️ Error de base de datos: {e}")
             else:
                 st.warning("El total a pagar no puede ser cero. Revisa tu planilla primero.")
                 
-    # --- NUEVA PESTAÑA PARA REIMPRIMIR RECIBOS VIEJOS ---
     with tab_historial_recibos:
         st.markdown("### 🗄️ Historial de Recibos Emitidos")
         st.write("Consulta y reimprime cualquier recibo de pago anterior.")
@@ -1050,7 +1046,6 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
             df_recibos = conn.query("SELECT * FROM recibos_panaderos ORDER BY id DESC", ttl=0)
             
             if not df_recibos.empty:
-                # Damos formato bonito a la tabla para la pantalla
                 df_mostrar = df_recibos.copy()
                 df_mostrar['fecha_emision'] = pd.to_datetime(df_mostrar['fecha_emision']).dt.strftime('%d/%m/%Y')
                 
@@ -1069,12 +1064,10 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
                 st.markdown("---")
                 st.markdown("#### 🖨️ Seleccionar para Reimprimir")
                 
-                # Lista desplegable combinando número y nombre para que sea más fácil de buscar
                 opciones_recibo = df_recibos.apply(lambda row: f"Recibo {row['num_recibo']} - {row['panadero']} (Q {row['total_pagar']})", axis=1).tolist()
                 recibo_seleccionado = st.selectbox("Selecciona el recibo que deseas descargar de nuevo:", opciones_recibo)
                 
                 if st.button("📥 Reimprimir este Recibo", type="secondary"):
-                    # Extraer el ID real de la selección
                     idx_seleccion = opciones_recibo.index(recibo_seleccionado)
                     datos_recibo = df_recibos.iloc[idx_seleccion]
                     
@@ -1104,7 +1097,7 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
             else:
                 st.info("Aún no has guardado ningún recibo de pago en el sistema.")
         except Exception as e:
-            st.error("Esperando a que crees la tabla 'recibos_panaderos' en tu base de datos Neon.")
+            st.error(f"⚠️ Error de base de datos: {e}")
 
 # ------------------------------------------
 # MÓDULO 6: REPORTE PDF MENSUAL
