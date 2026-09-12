@@ -310,9 +310,10 @@ with st.sidebar:
     st.markdown("---")
     
     st.subheader("📍 Menú Principal")
+    # AGREGADA LA NUEVA OPCIÓN "📆 Comparativa Diaria"
     opcion_menu = st.radio(
         "Selecciona un módulo:",
-        ["📝 Registro de Corte", "📅 Historial de Cortes", "📈 Estadísticas", "💳 Proveedores", "📊 Reporte PDF Mensual"],
+        ["📝 Registro de Corte", "📅 Historial de Cortes", "📈 Estadísticas", "📆 Comparativa Diaria", "💳 Proveedores", "📊 Reporte PDF Mensual"],
         label_visibility="collapsed"
     )
     
@@ -400,7 +401,6 @@ if opcion_menu == "📝 Registro de Corte":
     
     st.markdown("---")
     st.markdown("### 📊 Cuadre Final")
-    # AHORA SON 5 COLUMNAS PARA MOSTRAR EL TOTAL DE INGRESOS
     col_tot1, col_tot2, col_tot_bruto, col_tot3, col_tot4 = st.columns(5)
     
     col_tot1.metric("💵 Ingresos (Efectivo)", f"Q {total_ingresos_efectivo:.2f}")
@@ -510,7 +510,6 @@ elif opcion_menu == "📅 Historial de Cortes":
             neto_efectivo = sum_efectivo - sum_gastos
             
             st.markdown(f"### Resumen del {fecha_consulta.strftime('%d/%m/%Y')}")
-            # TAMBIÉN 5 COLUMNAS EN EL HISTORIAL PARA VER EL TOTAL
             col_h1, col_h2, col_h_bruto, col_h3, col_h4 = st.columns(5)
             col_h1.metric("💵 Ingresos Efectivo", f"Q {sum_efectivo:.2f}")
             col_h2.metric("📱 Transferencias/Fri", f"Q {sum_transferencias:.2f}")
@@ -600,6 +599,95 @@ elif opcion_menu == "📈 Estadísticas":
             
     except Exception as e:
         st.error(f"Error al cargar las estadísticas: {e}")
+
+# ------------------------------------------
+# MÓDULO 3.5: COMPARATIVA DIARIA (NUEVO)
+# ------------------------------------------
+elif opcion_menu == "📆 Comparativa Diaria":
+    st.title("📆 Comparativa de Ingresos vs Gastos por Día")
+    st.write("Mira cuánto entró y cuánto salió exactamente cada día en el rango que elijas.")
+    
+    hoy = get_fecha_guate()
+    primer_dia_mes = hoy.replace(day=1)
+    
+    col_d1, col_d2 = st.columns(2)
+    fecha_inicio_comp = col_d1.date_input("Desde:", primer_dia_mes, format="DD/MM/YYYY")
+    fecha_fin_comp = col_d2.date_input("Hasta:", hoy, format="DD/MM/YYYY")
+    
+    if st.button("🔍 Consultar Días", type="primary"):
+        with st.spinner("Cargando los datos día por día..."):
+            try:
+                # 1. Traer Ingresos por día
+                q_ing = """
+                    SELECT cd.fecha, 
+                           SUM(COALESCE(i.venta_total, 0) + COALESCE(i.credito_pagado, 0) + COALESCE(i.transferencias, 0)) as ingresos
+                    FROM cortes_diarios cd
+                    LEFT JOIN ingresos i ON cd.id = i.corte_id
+                    WHERE cd.fecha BETWEEN :inicio AND :fin
+                    GROUP BY cd.fecha
+                """
+                df_ing = conn.query(q_ing, params={"inicio": fecha_inicio_comp, "fin": fecha_fin_comp}, ttl=0)
+                
+                # 2. Traer Gastos por día
+                q_gas = """
+                    SELECT cd.fecha, SUM(COALESCE(g.monto, 0)) as gastos
+                    FROM cortes_diarios cd
+                    LEFT JOIN gastos g ON cd.id = g.corte_id
+                    WHERE cd.fecha BETWEEN :inicio AND :fin
+                    GROUP BY cd.fecha
+                """
+                df_gas = conn.query(q_gas, params={"inicio": fecha_inicio_comp, "fin": fecha_fin_comp}, ttl=0)
+                
+                if df_ing.empty and df_gas.empty:
+                    st.warning("No hay registros en esas fechas.")
+                else:
+                    # Unir las dos tablas para tener todo en una sola vista
+                    df_resumen = pd.merge(df_ing, df_gas, on='fecha', how='outer').fillna(0)
+                    df_resumen['fecha'] = pd.to_datetime(df_resumen['fecha']).dt.date
+                    df_resumen = df_resumen.sort_values('fecha')
+                    df_resumen['utilidad'] = df_resumen['ingresos'] - df_resumen['gastos']
+                    
+                    # Calcular sumas totales
+                    t_ing = df_resumen['ingresos'].sum()
+                    t_gas = df_resumen['gastos'].sum()
+                    t_uti = df_resumen['utilidad'].sum()
+                    
+                    st.markdown("---")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("💰 Total Ingresos del Rango", f"Q {t_ing:,.2f}")
+                    c2.metric("📉 Total Gastos del Rango", f"Q {t_gas:,.2f}")
+                    c3.metric("⚖️ Utilidad del Rango", f"Q {t_uti:,.2f}")
+                    st.markdown("---")
+                    
+                    # Gráfica de barras comparativa
+                    st.subheader("📊 Gráfica de Movimientos Diarios")
+                    df_graf = df_resumen[['fecha', 'ingresos', 'gastos']].melt(id_vars='fecha', var_name='Tipo', value_name='Monto')
+                    fig = px.bar(
+                        df_graf, 
+                        x='fecha', 
+                        y='Monto', 
+                        color='Tipo', 
+                        barmode='group', 
+                        color_discrete_map={'ingresos': '#27AE60', 'gastos': '#E74C3C'}
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Tabla final
+                    st.subheader("📋 Detalle de cada día")
+                    st.dataframe(
+                        df_resumen,
+                        column_config={
+                            "fecha": st.column_config.DateColumn("Fecha del Corte", format="DD/MM/YYYY"),
+                            "ingresos": st.column_config.NumberColumn("Total Ingresos (Efec + Fri)", format="Q %.2f"),
+                            "gastos": st.column_config.NumberColumn("Total Gastos", format="Q %.2f"),
+                            "utilidad": st.column_config.NumberColumn("Utilidad Neta", format="Q %.2f")
+                        },
+                        hide_index=True,
+                        use_container_width=True
+                    )
+                    
+            except Exception as e:
+                st.error(f"Error al cargar la comparativa: {e}")
 
 # ------------------------------------------
 # MÓDULO 4: PROVEEDORES
