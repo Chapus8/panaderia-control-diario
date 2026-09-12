@@ -109,6 +109,7 @@ def autocompletar_categoria(detalle):
         return 'PRESTAMOS E INTERESES'
     return 'OTROS GASTOS' 
 
+# -- FUNCIONES PARA PDF --
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_efectivo, pago_pedidos, transferencias):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -301,6 +302,67 @@ def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gas
     buffer.seek(0)
     return buffer
 
+# --- NUEVA FUNCIÓN PARA EL PDF DE COMPARATIVA DIARIA ---
+def generar_pdf_comparativa_diaria(f_inicio, f_fin, df_resumen, t_ing, t_gas, t_uti):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50"))
+    subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray)
+    h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
+    
+    elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style))
+    elements.append(Paragraph(f"REPORTE COMPARATIVO DIARIO: {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", subtitle_style))
+    elements.append(Spacer(1, 20))
+    
+    # Resumen Global
+    resumen_data = [
+        ["TOTAL INGRESOS", "TOTAL GASTOS", "UTILIDAD NETA"],
+        [f"Q {t_ing:,.2f}", f"Q {t_gas:,.2f}", f"Q {t_uti:,.2f}"]
+    ]
+    t_resumen = Table(resumen_data, colWidths=[150, 150, 150])
+    t_resumen.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 8),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold'),
+    ]))
+    elements.append(t_resumen)
+    elements.append(Spacer(1, 20))
+    
+    elements.append(Paragraph("<b>Detalle Diario de Movimientos</b>", h2_style))
+    
+    # Detalle Diario
+    det_data = [["FECHA", "TOTAL INGRESOS", "TOTAL GASTOS", "UTILIDAD NETA"]]
+    for index, row in df_resumen.iterrows():
+        det_data.append([
+            row['fecha'].strftime('%d/%m/%Y'),
+            f"Q {row['ingresos']:,.2f}",
+            f"Q {row['gastos']:,.2f}",
+            f"Q {row['utilidad']:,.2f}"
+        ])
+        
+    t_det = Table(det_data, colWidths=[120, 120, 120, 120])
+    t_det.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#34495E")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('ALIGN', (0,0), (0,-1), 'CENTER'),
+        ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+    ]))
+    elements.append(t_det)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+
 # ==========================================
 # 4. MENÚ LATERAL (SIDEBAR)
 # ==========================================
@@ -310,7 +372,6 @@ with st.sidebar:
     st.markdown("---")
     
     st.subheader("📍 Menú Principal")
-    # AGREGADA LA NUEVA OPCIÓN "📆 Comparativa Diaria"
     opcion_menu = st.radio(
         "Selecciona un módulo:",
         ["📝 Registro de Corte", "📅 Historial de Cortes", "📈 Estadísticas", "📆 Comparativa Diaria", "💳 Proveedores", "📊 Reporte PDF Mensual"],
@@ -496,14 +557,12 @@ elif opcion_menu == "📅 Historial de Cortes":
         
         if not corte_data.empty:
             corte_id = corte_data.iloc[0]['id']
-            
             ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos, i.transferencias as transferencias FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {corte_id}", ttl=0)
             gastos_hist = conn.query(f"SELECT c.nombre as Categoria, g.detalle as Detalle, g.monto as Monto FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id WHERE g.corte_id = {corte_id}", ttl=0)
             
             sum_venta = ingresos_hist['venta_mostrador'].sum() if not ingresos_hist.empty else 0.0
             sum_pedidos = ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0.0
             sum_transferencias = ingresos_hist['transferencias'].sum() if not ingresos_hist.empty and 'transferencias' in ingresos_hist.columns else 0.0
-            
             sum_efectivo = sum_venta + sum_pedidos
             total_ingresos_bruto_hist = sum_efectivo + sum_transferencias
             sum_gastos = gastos_hist['monto'].sum() if not gastos_hist.empty else 0.0
@@ -601,7 +660,7 @@ elif opcion_menu == "📈 Estadísticas":
         st.error(f"Error al cargar las estadísticas: {e}")
 
 # ------------------------------------------
-# MÓDULO 3.5: COMPARATIVA DIARIA (NUEVO)
+# MÓDULO 3.5: COMPARATIVA DIARIA
 # ------------------------------------------
 elif opcion_menu == "📆 Comparativa Diaria":
     st.title("📆 Comparativa de Ingresos vs Gastos por Día")
@@ -617,7 +676,6 @@ elif opcion_menu == "📆 Comparativa Diaria":
     if st.button("🔍 Consultar Días", type="primary"):
         with st.spinner("Cargando los datos día por día..."):
             try:
-                # 1. Traer Ingresos por día
                 q_ing = """
                     SELECT cd.fecha, 
                            SUM(COALESCE(i.venta_total, 0) + COALESCE(i.credito_pagado, 0) + COALESCE(i.transferencias, 0)) as ingresos
@@ -628,7 +686,6 @@ elif opcion_menu == "📆 Comparativa Diaria":
                 """
                 df_ing = conn.query(q_ing, params={"inicio": fecha_inicio_comp, "fin": fecha_fin_comp}, ttl=0)
                 
-                # 2. Traer Gastos por día
                 q_gas = """
                     SELECT cd.fecha, SUM(COALESCE(g.monto, 0)) as gastos
                     FROM cortes_diarios cd
@@ -641,13 +698,11 @@ elif opcion_menu == "📆 Comparativa Diaria":
                 if df_ing.empty and df_gas.empty:
                     st.warning("No hay registros en esas fechas.")
                 else:
-                    # Unir las dos tablas para tener todo en una sola vista
                     df_resumen = pd.merge(df_ing, df_gas, on='fecha', how='outer').fillna(0)
                     df_resumen['fecha'] = pd.to_datetime(df_resumen['fecha']).dt.date
                     df_resumen = df_resumen.sort_values('fecha')
                     df_resumen['utilidad'] = df_resumen['ingresos'] - df_resumen['gastos']
                     
-                    # Calcular sumas totales
                     t_ing = df_resumen['ingresos'].sum()
                     t_gas = df_resumen['gastos'].sum()
                     t_uti = df_resumen['utilidad'].sum()
@@ -659,7 +714,6 @@ elif opcion_menu == "📆 Comparativa Diaria":
                     c3.metric("⚖️ Utilidad del Rango", f"Q {t_uti:,.2f}")
                     st.markdown("---")
                     
-                    # Gráfica de barras comparativa
                     st.subheader("📊 Gráfica de Movimientos Diarios")
                     df_graf = df_resumen[['fecha', 'ingresos', 'gastos']].melt(id_vars='fecha', var_name='Tipo', value_name='Monto')
                     fig = px.bar(
@@ -672,7 +726,6 @@ elif opcion_menu == "📆 Comparativa Diaria":
                     )
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Tabla final
                     st.subheader("📋 Detalle de cada día")
                     st.dataframe(
                         df_resumen,
@@ -683,6 +736,19 @@ elif opcion_menu == "📆 Comparativa Diaria":
                             "utilidad": st.column_config.NumberColumn("Utilidad Neta", format="Q %.2f")
                         },
                         hide_index=True,
+                        use_container_width=True
+                    )
+                    
+                    st.markdown("---")
+                    
+                    # Generar PDF Comparativa y Botón de Descarga
+                    pdf_comparativa = generar_pdf_comparativa_diaria(fecha_inicio_comp, fecha_fin_comp, df_resumen, t_ing, t_gas, t_uti)
+                    st.download_button(
+                        label="📥 Descargar Comparativa en PDF",
+                        data=pdf_comparativa,
+                        file_name=f"Comparativa_Diaria_{fecha_inicio_comp.strftime('%d-%m-%Y')}_al_{fecha_fin_comp.strftime('%d-%m-%Y')}.pdf",
+                        mime="application/pdf",
+                        type="secondary",
                         use_container_width=True
                     )
                     
