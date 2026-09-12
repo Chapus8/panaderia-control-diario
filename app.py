@@ -47,7 +47,7 @@ def get_fecha_guate():
     zona_guate = pytz.timezone('America/Guatemala')
     return datetime.now(zona_guate).date()
 
-# --- FUNCIÓN PARA CONVERTIR NÚMEROS A LETRAS (PARA EL RECIBO) ---
+# --- FUNCIÓN PARA CONVERTIR NÚMEROS A LETRAS ---
 def numero_a_letras(numero):
     unidades = ["", "UN", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE"]
     decenas = ["", "DIEZ", "VEINTE", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"]
@@ -415,21 +415,17 @@ def generar_pdf_planilla(panadero, f_inicio, f_fin, df_planilla, tot_lb_masa, to
     buffer.seek(0)
     return buffer
 
-# --- NUEVA FUNCIÓN PARA EL RECIBO TIPO EXCEL ---
 def generar_pdf_recibo(num_recibo, fecha_emision, panadero, f_inicio, f_fin, qq_total, precio_qq, subtotal, septimo, tortas, tienda, total_pagar):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     elements = []
-    styles = getSampleStyleSheet()
     
-    # Estilos del recibo
     title_style = ParagraphStyle('Title', fontName="Helvetica-Bold", fontSize=18, textColor=colors.HexColor("#2980B9"))
     subtitle_style = ParagraphStyle('Sub', fontName="Helvetica", fontSize=10, textColor=colors.black)
-    label_style = ParagraphStyle('Lbl', fontName="Helvetica-Bold", fontSize=11, alignment=2, textColor=colors.HexColor("#34495E")) # Alineado a la derecha
-    val_style = ParagraphStyle('Val', fontName="Helvetica", fontSize=11, alignment=0) # Alineado a la izquierda
+    label_style = ParagraphStyle('Lbl', fontName="Helvetica-Bold", fontSize=11, alignment=2, textColor=colors.HexColor("#34495E")) 
+    val_style = ParagraphStyle('Val', fontName="Helvetica", fontSize=11, alignment=0) 
     center_bold = ParagraphStyle('CBold', fontName="Helvetica-Bold", fontSize=14, alignment=1, textColor=colors.HexColor("#2C3E50"))
     
-    # 1. ENCABEZADO (Tabla Superior)
     header_data = [
         [Paragraph("Panadería y Repostería Judith", title_style), "RECIBO NO."],
         [Paragraph("1a. Ave. 0-96 Zona 2, Residenciales", subtitle_style), f"{num_recibo}"],
@@ -437,20 +433,14 @@ def generar_pdf_recibo(num_recibo, fecha_emision, panadero, f_inicio, f_fin, qq_
     ]
     t_header = Table(header_data, colWidths=[330, 200])
     t_header.setStyle(TableStyle([
-        ('ALIGN', (1,0), (1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('FONTNAME', (1,0), (1,-1), 'Helvetica-Bold'),
-        ('FONTNAME', (1,2), (1,2), 'Helvetica-Bold'),
-        ('TEXTCOLOR', (1,0), (1,0), colors.HexColor("#2980B9")),
-        ('TEXTCOLOR', (1,2), (1,2), colors.HexColor("#2980B9")),
-        ('BACKGROUND', (1,1), (1,1), colors.lightgrey),
-        ('BOX', (0,0), (-1,-1), 1.5, colors.black),
-        ('GRID', (1,0), (1,-1), 0.5, colors.black),
-        ('SPAN', (0,0), (0,1)), # Une las dos filas de la izquierda
+        ('ALIGN', (1,0), (1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('FONTNAME', (1,0), (1,-1), 'Helvetica-Bold'), ('FONTNAME', (1,2), (1,2), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (1,0), (1,0), colors.HexColor("#2980B9")), ('TEXTCOLOR', (1,2), (1,2), colors.HexColor("#2980B9")),
+        ('BACKGROUND', (1,1), (1,1), colors.lightgrey), ('BOX', (0,0), (-1,-1), 1.5, colors.black),
+        ('GRID', (1,0), (1,-1), 0.5, colors.black), ('SPAN', (0,0), (0,1)), 
     ]))
     elements.append(t_header)
     
-    # 2. INFORMACIÓN BÁSICA
     cantidad_letras = numero_a_letras(total_pagar)
     info_data = [
         [Paragraph("Fecha de Emisión:", label_style), Paragraph(fecha_emision.strftime('%A, %d de %B de %Y'), val_style)],
@@ -459,30 +449,22 @@ def generar_pdf_recibo(num_recibo, fecha_emision, panadero, f_inicio, f_fin, qq_
     ]
     t_info = Table(info_data, colWidths=[150, 380])
     t_info.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOX', (0,0), (-1,-1), 1.5, colors.black),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ('TOPPADDING', (0,0), (-1,-1), 6)
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BOX', (0,0), (-1,-1), 1.5, colors.black),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.black), ('BOTTOMPADDING', (0,0), (-1,-1), 6), ('TOPPADDING', (0,0), (-1,-1), 6)
     ]))
     elements.append(t_info)
     
-    # 3. POR CONCEPTO DE
     concept_data = [
         [Paragraph("Por Concepto De:", center_bold)],
-        [Paragraph(f"Salario correspondiente del {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", ParagraphStyle('C', alignment=1, fontSize=12))]
+        [Paragraph(f"Salario correspondiente del {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')} a favor de {panadero.upper()}", ParagraphStyle('C', alignment=1, fontSize=12))]
     ]
     t_concept = Table(concept_data, colWidths=[530])
     t_concept.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (0,0), colors.lightgrey),
-        ('BOX', (0,0), (-1,-1), 1.5, colors.black),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-        ('TOPPADDING', (0,0), (-1,-1), 8)
+        ('BACKGROUND', (0,0), (0,0), colors.lightgrey), ('BOX', (0,0), (-1,-1), 1.5, colors.black),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.black), ('BOTTOMPADDING', (0,0), (-1,-1), 8), ('TOPPADDING', (0,0), (-1,-1), 8)
     ]))
     elements.append(t_concept)
     
-    # 4. CUADRO DE CÁLCULOS
     calc_data = [
         [f"{qq_total:.2f}", "", ""],
         ["Quintalaje", f"Q {precio_qq:.2f}", f"Q {subtotal:,.2f}"],
@@ -493,27 +475,13 @@ def generar_pdf_recibo(num_recibo, fecha_emision, panadero, f_inicio, f_fin, qq_
     ]
     t_calc = Table(calc_data, colWidths=[330, 80, 120])
     t_calc.setStyle(TableStyle([
-        ('ALIGN', (0,0), (0,-1), 'RIGHT'),
-        ('ALIGN', (1,0), (1,-1), 'CENTER'),
-        ('ALIGN', (2,0), (2,-1), 'RIGHT'),
-        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
-        ('FONTNAME', (0,1), (0,1), 'Helvetica-Bold'),
-        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
-        
-        # Bordes para las casillas pequeñas (como en tu Excel)
-        ('BOX', (0,0), (0,0), 1, colors.black),
-        ('BOX', (1,1), (1,1), 1, colors.black),
-        
-        # Bordes de la columna final
-        ('BOX', (2,1), (2,-1), 1, colors.black),
-        ('GRID', (2,1), (2,-1), 0.5, colors.black),
-        
-        # Borde exterior de todo el bloque
-        ('BOX', (0,0), (-1,-1), 1.5, colors.black),
+        ('ALIGN', (0,0), (0,-1), 'RIGHT'), ('ALIGN', (1,0), (1,-1), 'CENTER'), ('ALIGN', (2,0), (2,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'), ('FONTNAME', (0,1), (0,1), 'Helvetica-Bold'), ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+        ('BOX', (0,0), (0,0), 1, colors.black), ('BOX', (1,1), (1,1), 1, colors.black),
+        ('BOX', (2,1), (2,-1), 1, colors.black), ('GRID', (2,1), (2,-1), 0.5, colors.black), ('BOX', (0,0), (-1,-1), 1.5, colors.black),
     ]))
     elements.append(t_calc)
     
-    # 5. ESPACIO PARA FIRMA
     elements.append(Spacer(1, 60))
     elements.append(Paragraph("__________________________________________", ParagraphStyle('firma', alignment=1)))
     elements.append(Paragraph(f"Firma de Recibido - {panadero.upper()}", ParagraphStyle('firma', alignment=1)))
@@ -968,7 +936,8 @@ elif opcion_menu == "💳 Proveedores":
 elif opcion_menu == "👨‍🍳 Planilla Panaderos":
     st.title("👨‍🍳 Control de Producción y Recibos")
     
-    tab_planilla, tab_recibo = st.tabs(["📝 1. Calcular Planilla (Detalle)", "🧾 2. Emitir Recibo de Pago"])
+    # --- AHORA SON 3 PESTAÑAS ---
+    tab_planilla, tab_recibo, tab_historial_recibos = st.tabs(["📝 1. Calcular Planilla (Detalle)", "🧾 2. Emitir Recibo de Pago", "🗄️ 3. Historial de Recibos"])
     
     with tab_planilla:
         st.markdown("Reemplaza tu Excel con este módulo. Ingresa las libras producidas por día.")
@@ -1047,13 +1016,95 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
         st.markdown(f"<h3 style='text-align: center; color: #27AE60;'>Total a Pagar: Q {total_final_pagar:,.2f}</h3>", unsafe_allow_html=True)
         st.markdown("---")
         
-        if st.button("📥 Generar Recibo Oficial (PDF)", type="primary", use_container_width=True):
+        # --- AQUÍ SE GUARDA EN LA BASE DE DATOS Y SE GENERA EL PDF ---
+        if st.button("💾 Guardar y Emitir Recibo Oficial", type="primary", use_container_width=True):
             if total_final_pagar > 0:
-                pdf_recibo = generar_pdf_recibo(numero_recibo, fecha_emision_recibo, panadero_nombre, fecha_inicio_plan, fecha_fin_plan, gran_total_quintales, precio_quintal, pago_total_quincena, septimo_val, tortas_val, tienda_val, total_final_pagar)
-                st.success("✅ ¡Recibo de pago listo!")
-                st.download_button(label="📥 Descargar Recibo para Firma", data=pdf_recibo, file_name=f"Recibo_Pago_{panadero_nombre}_{numero_recibo}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
+                try:
+                    with conn.session as s:
+                        s.execute(text("""
+                            INSERT INTO recibos_panaderos 
+                            (panadero, fecha_inicio, fecha_fin, num_recibo, fecha_emision, gran_total_qq, precio_qq, subtotal, septimo, tortas, tienda, total_pagar)
+                            VALUES (:p, :fi, :ff, :nr, :fe, :gqq, :pqq, :sub, :sep, :tor, :tie, :tot)
+                        """), {
+                            "p": panadero_nombre, "fi": fecha_inicio_plan, "ff": fecha_fin_plan,
+                            "nr": numero_recibo, "fe": fecha_emision_recibo, "gqq": gran_total_quintales,
+                            "pqq": precio_quintal, "sub": pago_total_quincena, "sep": septimo_val,
+                            "tor": tortas_val, "tie": tienda_val, "tot": total_final_pagar
+                        })
+                        s.commit()
+                    
+                    pdf_recibo = generar_pdf_recibo(numero_recibo, fecha_emision_recibo, panadero_nombre, fecha_inicio_plan, fecha_fin_plan, gran_total_quintales, precio_quintal, pago_total_quincena, septimo_val, tortas_val, tienda_val, total_final_pagar)
+                    st.success("✅ ¡Recibo guardado en el historial y listo para imprimir!")
+                    st.download_button(label="📥 Descargar Recibo para Firma", data=pdf_recibo, file_name=f"Recibo_Pago_{panadero_nombre}_{numero_recibo}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
+                except Exception as e:
+                    st.error("⚠️ Falta crear la tabla en la base de datos (Ejecuta el código SQL que te di).")
             else:
                 st.warning("El total a pagar no puede ser cero. Revisa tu planilla primero.")
+                
+    # --- NUEVA PESTAÑA PARA REIMPRIMIR RECIBOS VIEJOS ---
+    with tab_historial_recibos:
+        st.markdown("### 🗄️ Historial de Recibos Emitidos")
+        st.write("Consulta y reimprime cualquier recibo de pago anterior.")
+        
+        try:
+            df_recibos = conn.query("SELECT * FROM recibos_panaderos ORDER BY id DESC", ttl=0)
+            
+            if not df_recibos.empty:
+                # Damos formato bonito a la tabla para la pantalla
+                df_mostrar = df_recibos.copy()
+                df_mostrar['fecha_emision'] = pd.to_datetime(df_mostrar['fecha_emision']).dt.strftime('%d/%m/%Y')
+                
+                st.dataframe(
+                    df_mostrar[['num_recibo', 'panadero', 'fecha_emision', 'gran_total_qq', 'total_pagar']], 
+                    column_config={
+                        "num_recibo": "No. Recibo",
+                        "panadero": "Panadero",
+                        "fecha_emision": "Emitido El",
+                        "gran_total_qq": "Total QQ",
+                        "total_pagar": st.column_config.NumberColumn("Total Pagado", format="Q %.2f")
+                    },
+                    use_container_width=True, hide_index=True
+                )
+                
+                st.markdown("---")
+                st.markdown("#### 🖨️ Seleccionar para Reimprimir")
+                
+                # Lista desplegable combinando número y nombre para que sea más fácil de buscar
+                opciones_recibo = df_recibos.apply(lambda row: f"Recibo {row['num_recibo']} - {row['panadero']} (Q {row['total_pagar']})", axis=1).tolist()
+                recibo_seleccionado = st.selectbox("Selecciona el recibo que deseas descargar de nuevo:", opciones_recibo)
+                
+                if st.button("📥 Reimprimir este Recibo", type="secondary"):
+                    # Extraer el ID real de la selección
+                    idx_seleccion = opciones_recibo.index(recibo_seleccionado)
+                    datos_recibo = df_recibos.iloc[idx_seleccion]
+                    
+                    pdf_reimpresion = generar_pdf_recibo(
+                        datos_recibo['num_recibo'],
+                        pd.to_datetime(datos_recibo['fecha_emision']).date(),
+                        datos_recibo['panadero'],
+                        pd.to_datetime(datos_recibo['fecha_inicio']).date(),
+                        pd.to_datetime(datos_recibo['fecha_fin']).date(),
+                        datos_recibo['gran_total_qq'],
+                        datos_recibo['precio_qq'],
+                        datos_recibo['subtotal'],
+                        datos_recibo['septimo'],
+                        datos_recibo['tortas'],
+                        datos_recibo['tienda'],
+                        datos_recibo['total_pagar']
+                    )
+                    
+                    st.download_button(
+                        label="Descargar Archivo PDF",
+                        data=pdf_reimpresion,
+                        file_name=f"Reimpresion_Recibo_{datos_recibo['panadero']}_{datos_recibo['num_recibo']}.pdf",
+                        mime="application/pdf",
+                        type="primary",
+                        use_container_width=True
+                    )
+            else:
+                st.info("Aún no has guardado ningún recibo de pago en el sistema.")
+        except Exception as e:
+            st.error("Esperando a que crees la tabla 'recibos_panaderos' en tu base de datos Neon.")
 
 # ------------------------------------------
 # MÓDULO 6: REPORTE PDF MENSUAL
