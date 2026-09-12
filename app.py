@@ -10,6 +10,9 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.charts.piecharts import Pie
+# NUEVAS LIBRERÍAS PARA LA GRÁFICA DE BARRAS EN EL PDF
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+from reportlab.graphics.charts.legends import Legend
 import io
 import re
 import streamlit.components.v1 as components 
@@ -91,30 +94,21 @@ def obtener_o_crear_corte(fecha_corte):
 
 def autocompletar_categoria(detalle):
     d = str(detalle).lower()
-    if 'pasta' in d or 'pollo' in d:
-        return 'COMPRAS DE PASTA DE POLLO'
-    if 'bolsa de agua' in d or 'agua' in d or 'gaseosa' in d or 'coca' in d or 'bebida' in d or 'tostada' in d or 'marquesote' in d:
-        return 'OTRAS MERCADERIAS'
-    if 'luz' in d or 'internet' in d or 'telefono' in d or 'basura' in d or 'alquiler' in d or 'impuesto' in d or 'gas ' in d or 'propano' in d:
-        return 'OTROS GASTOS' 
-    if re.search(r'\b(harina|azucar|azúcar|manteca|levadura|leche|huevo|huevos|sal)\b', d):
-        return 'MATERIA PRIMA'
-    if re.search(r'\b(bono|sueldo|sueldos|salario|salarios|anticipo|almuerzo|planilla|turno|quincena|panadero)\b', d):
-        return 'SUELDOS Y SALARIOS'
-    if re.search(r'\b(gasolina|moto|vehiculo|repuesto|llanta|aceite|mecanico|pinchazo)\b', d):
-        return 'REPUESTOS Y REPARACIONES'
-    if re.search(r'\b(bolsa|bandeja|calcomania|papel|limpieza|empaque|escoba|jabon|cloro)\b', d):
-        return 'UTILES Y EMPAQUES'
-    if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota)\b', d):
-        return 'PRESTAMOS E INTERESES'
+    if 'pasta' in d or 'pollo' in d: return 'COMPRAS DE PASTA DE POLLO'
+    if 'bolsa de agua' in d or 'agua' in d or 'gaseosa' in d or 'coca' in d or 'bebida' in d or 'tostada' in d or 'marquesote' in d: return 'OTRAS MERCADERIAS'
+    if 'luz' in d or 'internet' in d or 'telefono' in d or 'basura' in d or 'alquiler' in d or 'impuesto' in d or 'gas ' in d or 'propano' in d: return 'OTROS GASTOS' 
+    if re.search(r'\b(harina|azucar|azúcar|manteca|levadura|leche|huevo|huevos|sal)\b', d): return 'MATERIA PRIMA'
+    if re.search(r'\b(bono|sueldo|sueldos|salario|salarios|anticipo|almuerzo|planilla|turno|quincena|panadero)\b', d): return 'SUELDOS Y SALARIOS'
+    if re.search(r'\b(gasolina|moto|vehiculo|repuesto|llanta|aceite|mecanico|pinchazo)\b', d): return 'REPUESTOS Y REPARACIONES'
+    if re.search(r'\b(bolsa|bandeja|calcomania|papel|limpieza|empaque|escoba|jabon|cloro)\b', d): return 'UTILES Y EMPAQUES'
+    if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota)\b', d): return 'PRESTAMOS E INTERESES'
     return 'OTROS GASTOS' 
 
-# -- FUNCIONES PARA PDF --
+# -- FUNCIONES PDF (Corte, Comparativa, Mensual) --
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_efectivo, pago_pedidos, transferencias):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
-    
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50"))
     subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray)
@@ -124,15 +118,11 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_ef
     elements.append(Paragraph("INTEGRACIÓN DE INGRESOS Y EGRESOS - CORTE DE CAJA", subtitle_style))
     elements.append(Spacer(1, 15))
     
-    info_data = [
-        [Paragraph(f"<b>Fecha:</b> {fecha_str}", bold_style), Paragraph(f"<b>Local / Ruta:</b> {local_str}", bold_style), Paragraph(f"<b>Responsable:</b> {responsable_str}", bold_style)]
-    ]
+    info_data = [[Paragraph(f"<b>Fecha:</b> {fecha_str}", bold_style), Paragraph(f"<b>Local / Ruta:</b> {local_str}", bold_style), Paragraph(f"<b>Responsable:</b> {responsable_str}", bold_style)]]
     info_table = Table(info_data, colWidths=[150, 200, 190])
     info_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EAFAF1")),
-        ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#27AE60")),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('PADDING', (0,0), (-1,-1), 6),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EAFAF1")), ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#27AE60")),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('PADDING', (0,0), (-1,-1), 6),
     ]))
     elements.append(info_table)
     elements.append(Spacer(1, 15))
@@ -144,20 +134,15 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_ef
             categoria_mostrar = row["Categoría"] if pd.notna(row["Categoría"]) else "OTROS GASTOS"
             gastos_table_data.append([str(categoria_mostrar), str(row["Detalle"]), f"Q {row['Monto (Q)']:.2f}"])
             total_gastos += float(row["Monto (Q)"])
-    while len(gastos_table_data) < 10:
-        gastos_table_data.append(["", "", ""])
+    while len(gastos_table_data) < 10: gastos_table_data.append(["", "", ""])
     gastos_table_data.append(["", "TOTAL GASTOS", f"Q {total_gastos:.2f}"])
     
     t_gastos = Table(gastos_table_data, colWidths=[180, 240, 120])
     t_gastos.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#27AE60")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-        ('ALIGN', (2,0), (2,-1), 'RIGHT'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0,0), (-1,0), 6),
-        ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
-        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor("#D4EFDF")),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#27AE60")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'), ('ALIGN', (2,0), (2,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('BOTTOMPADDING', (0,0), (-1,0), 6),
+        ('GRID', (0,0), (-1,-2), 0.5, colors.grey), ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor("#D4EFDF")),
         ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
     ]))
     elements.append(t_gastos)
@@ -168,30 +153,20 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_ef
     neto_efectivo = efectivo_ingresado - total_gastos
     
     resumen_data = [
-        ["RESUMEN FINANCIERO", "MONTO"],
-        ["Venta de Pan (Efectivo)", f"Q {venta_efectivo:.2f}"],
-        ["Pago de Pedidos (Efectivo)", f"Q {pago_pedidos:.2f}"],
-        ["Transferencias / Fri / Depósitos", f"Q {transferencias:.2f}"],
-        ["TOTAL INGRESOS BRUTOS", f"Q {total_ingresos_brutos:.2f}"],
-        ["TOTAL GASTOS (En efectivo)", f"Q {total_gastos:.2f}"],
+        ["RESUMEN FINANCIERO", "MONTO"], ["Venta de Pan (Efectivo)", f"Q {venta_efectivo:.2f}"],
+        ["Pago de Pedidos (Efectivo)", f"Q {pago_pedidos:.2f}"], ["Transferencias / Fri / Depósitos", f"Q {transferencias:.2f}"],
+        ["TOTAL INGRESOS BRUTOS", f"Q {total_ingresos_brutos:.2f}"], ["TOTAL GASTOS (En efectivo)", f"Q {total_gastos:.2f}"],
         ["EFECTIVO NETO A ENTREGAR", f"Q {neto_efectivo:.2f}"]
     ]
-    
     t_resumen = Table(resumen_data, colWidths=[340, 200])
     t_resumen.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-        ('ALIGN', (1,0), (1,-1), 'RIGHT'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-        ('BACKGROUND', (0,4), (-1,4), colors.HexColor("#EAECEE")),
-        ('BACKGROUND', (0,6), (-1,6), colors.HexColor("#D4EFDF")),
-        ('FONTNAME', (0,4), (-1,4), 'Helvetica-Bold'),
-        ('FONTNAME', (0,6), (-1,6), 'Helvetica-Bold'),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'), ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('BACKGROUND', (0,4), (-1,4), colors.HexColor("#EAECEE")), ('BACKGROUND', (0,6), (-1,6), colors.HexColor("#D4EFDF")),
+        ('FONTNAME', (0,4), (-1,4), 'Helvetica-Bold'), ('FONTNAME', (0,6), (-1,6), 'Helvetica-Bold'),
     ]))
     elements.append(t_resumen)
-    
     doc.build(elements)
     buffer.seek(0)
     return buffer
@@ -201,7 +176,6 @@ def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gas
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
     styles = getSampleStyleSheet()
-    
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50"))
     subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray)
     h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
@@ -226,17 +200,11 @@ def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gas
     ]
     t_resumen = Table(resumen_data, colWidths=[140, 90, 190, 100])
     t_resumen.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (1,0), colors.HexColor("#27AE60")), 
-        ('BACKGROUND', (2,0), (3,0), colors.HexColor("#E74C3C")), 
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ALIGN', (1,0), (1,-1), 'RIGHT'),
-        ('ALIGN', (3,0), (3,-1), 'RIGHT'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-        ('BACKGROUND', (0,-1), (1,-1), colors.HexColor("#D4EFDF")),
-        ('FONTNAME', (0,-1), (1,-1), 'Helvetica-Bold'),
-        ('BACKGROUND', (2,3), (3,3), colors.HexColor("#FADBD8")), 
-        ('FONTNAME', (2,3), (3,3), 'Helvetica-Bold'),
+        ('BACKGROUND', (0,0), (1,0), colors.HexColor("#27AE60")), ('BACKGROUND', (2,0), (3,0), colors.HexColor("#E74C3C")), 
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('ALIGN', (1,0), (1,-1), 'RIGHT'), ('ALIGN', (3,0), (3,-1), 'RIGHT'), ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('BACKGROUND', (0,-1), (1,-1), colors.HexColor("#D4EFDF")), ('FONTNAME', (0,-1), (1,-1), 'Helvetica-Bold'),
+        ('BACKGROUND', (2,3), (3,3), colors.HexColor("#FADBD8")), ('FONTNAME', (2,3), (3,3), 'Helvetica-Bold'),
     ]))
     elements.append(t_resumen)
     elements.append(Spacer(1, 20))
@@ -245,24 +213,15 @@ def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gas
         elements.append(Paragraph("<b>Distribución de Gastos por Categoría</b>", h2_style))
         d = Drawing(400, 160)
         pc = Pie()
-        pc.x = 20
-        pc.y = 10
-        pc.width = 140
-        pc.height = 140
+        pc.x = 20; pc.y = 10; pc.width = 140; pc.height = 140
         pc.data = gastos_cat_df['total'].tolist()
-        
-        labels = []
-        for i, row in gastos_cat_df.iterrows():
-            pct = (row['total'] / t_gastos) * 100
-            labels.append(f"{row['categoria']} ({pct:.1f}%)")
+        labels = [f"{row['categoria']} ({(row['total']/t_gastos)*100:.1f}%)" for _, row in gastos_cat_df.iterrows()]
         pc.labels = labels
         pc.sideLabels = 1 
-        
         colores_hex = ["#3498DB", "#E74C3C", "#2ECC71", "#F1C40F", "#9B59B6", "#E67E22", "#1ABC9C", "#34495E", "#95A5A6"]
         for i in range(len(pc.data)):
             pc.slices[i].fillColor = colors.HexColor(colores_hex[i % len(colores_hex)])
             pc.slices[i].strokeColor = colors.white
-            
         d.add(pc)
         elements.append(d)
         elements.append(Spacer(1, 10))
@@ -274,10 +233,8 @@ def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gas
         
     t_cat = Table(gastos_data, colWidths=[250, 150, 120])
     t_cat.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#34495E")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#34495E")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
     ]))
     elements.append(t_cat)
@@ -287,74 +244,92 @@ def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gas
     det_data = [["CATEGORÍA", "DESCRIPCIÓN DEL GASTO", "TOTAL INVERTIDO"]]
     for index, row in gastos_det_df.iterrows():
         det_data.append([str(row["categoria"]), str(row["detalle"]).title(), f"Q {row['total']:,.2f}"])
-        
     t_det = Table(det_data, colWidths=[150, 250, 120])
     t_det.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#BDC3C7")),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ALIGN', (2,0), (2,-1), 'RIGHT'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
-        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#BDC3C7")), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('ALIGN', (2,0), (2,-1), 'RIGHT'), ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('FONTSIZE', (0,0), (-1,-1), 9),
     ]))
     elements.append(t_det)
-    
     doc.build(elements)
     buffer.seek(0)
     return buffer
 
-# --- NUEVA FUNCIÓN PARA EL PDF DE COMPARATIVA DIARIA ---
 def generar_pdf_comparativa_diaria(f_inicio, f_fin, df_resumen, t_ing, t_gas, t_uti):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     elements = []
     styles = getSampleStyleSheet()
-    
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50"))
     subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray)
     h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
     
+    # ENCABEZADO
     elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style))
     elements.append(Paragraph(f"REPORTE COMPARATIVO DIARIO: {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", subtitle_style))
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 15))
     
-    # Resumen Global
-    resumen_data = [
-        ["TOTAL INGRESOS", "TOTAL GASTOS", "UTILIDAD NETA"],
-        [f"Q {t_ing:,.2f}", f"Q {t_gas:,.2f}", f"Q {t_uti:,.2f}"]
-    ]
+    # RESUMEN GLOBAL
+    resumen_data = [["TOTAL INGRESOS", "TOTAL GASTOS", "UTILIDAD NETA"], [f"Q {t_ing:,.2f}", f"Q {t_gas:,.2f}", f"Q {t_uti:,.2f}"]]
     t_resumen = Table(resumen_data, colWidths=[150, 150, 150])
     t_resumen.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0,0), (-1,0), 8),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-        ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold'),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold'),
     ]))
     elements.append(t_resumen)
     elements.append(Spacer(1, 20))
     
-    elements.append(Paragraph("<b>Detalle Diario de Movimientos</b>", h2_style))
+    # LA NUEVA GRÁFICA DE BARRAS NATIVA
+    elements.append(Paragraph("<b>Gráfica Comparativa: Ingresos vs Gastos</b>", h2_style))
     
-    # Detalle Diario
+    d = Drawing(480, 200)
+    bc = VerticalBarChart()
+    bc.x = 40
+    bc.y = 40
+    bc.height = 140
+    bc.width = 420
+    
+    # Pasamos los datos
+    lista_ingresos = df_resumen['ingresos'].tolist()
+    lista_gastos = df_resumen['gastos'].tolist()
+    bc.data = [lista_ingresos, lista_gastos]
+    
+    # Personalización visual de la gráfica
+    bc.strokeColor = colors.white
+    bc.valueAxis.valueMin = 0
+    bc.categoryAxis.categoryNames = [fecha.strftime('%d/%m') for fecha in df_resumen['fecha']]
+    bc.categoryAxis.labels.angle = 45  # Inclinamos las fechas para que no choquen
+    bc.categoryAxis.labels.dy = -10
+    bc.categoryAxis.labels.fontSize = 8
+    
+    # Colores: Verde para Ingresos, Rojo para Gastos
+    bc.bars[0].fillColor = colors.HexColor("#27AE60") 
+    bc.bars[1].fillColor = colors.HexColor("#E74C3C") 
+    
+    # Leyenda
+    leg = Legend()
+    leg.x = 350
+    leg.y = 180
+    leg.alignment = 'right'
+    leg.colorNamePairs = [(colors.HexColor("#27AE60"), 'Total Ingresos'), (colors.HexColor("#E74C3C"), 'Total Gastos')]
+    leg.fontSize = 8
+    leg.boxAnchor = 'nw'
+    
+    d.add(bc)
+    d.add(leg)
+    elements.append(d)
+    elements.append(Spacer(1, 20))
+    
+    # TABLA DE DETALLE DIARIO
+    elements.append(Paragraph("<b>Detalle Diario de Movimientos</b>", h2_style))
     det_data = [["FECHA", "TOTAL INGRESOS", "TOTAL GASTOS", "UTILIDAD NETA"]]
     for index, row in df_resumen.iterrows():
-        det_data.append([
-            row['fecha'].strftime('%d/%m/%Y'),
-            f"Q {row['ingresos']:,.2f}",
-            f"Q {row['gastos']:,.2f}",
-            f"Q {row['utilidad']:,.2f}"
-        ])
-        
+        det_data.append([row['fecha'].strftime('%d/%m/%Y'), f"Q {row['ingresos']:,.2f}", f"Q {row['gastos']:,.2f}", f"Q {row['utilidad']:,.2f}"])
     t_det = Table(det_data, colWidths=[120, 120, 120, 120])
     t_det.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#34495E")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ALIGN', (0,0), (0,-1), 'CENTER'),
-        ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#34495E")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('ALIGN', (0,0), (0,-1), 'CENTER'),
+        ('ALIGN', (1,0), (-1,-1), 'RIGHT'), ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
     ]))
     elements.append(t_det)
     
@@ -374,7 +349,7 @@ with st.sidebar:
     st.subheader("📍 Menú Principal")
     opcion_menu = st.radio(
         "Selecciona un módulo:",
-        ["📝 Registro de Corte", "📅 Historial de Cortes", "📈 Estadísticas", "📆 Comparativa Diaria", "💳 Proveedores", "📊 Reporte PDF Mensual"],
+        ["📝 Registro de Corte", "📅 Historial de Cortes", "📈 Estadísticas", "📆 Comparativa Diaria", "🏆 Días Estrella", "💳 Proveedores", "📊 Reporte PDF Mensual"],
         label_visibility="collapsed"
     )
     
@@ -411,13 +386,11 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("### 💸 Detalle de Gastos")
     st.caption("✨ **Escribe todo rápido usando el teclado (Tab y Enter).** Cuando termines, presiona el botón Mágico de abajo.")
     
-    if 'reset_key' not in st.session_state:
-        st.session_state.reset_key = 0
+    if 'reset_key' not in st.session_state: st.session_state.reset_key = 0
 
     if 'gastos_df' not in st.session_state:
         st.session_state.gastos_df = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
-        for _ in range(11): 
-            st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
+        for _ in range(11): st.session_state.gastos_df.loc[len(st.session_state.gastos_df)] = [None, "", 0.0]
 
     gastos_editados = st.data_editor(
         st.session_state.gastos_df,
@@ -426,23 +399,18 @@ if opcion_menu == "📝 Registro de Corte":
             "Detalle": st.column_config.TextColumn("Detalle del gasto"),
             "Monto (Q)": st.column_config.NumberColumn("Total (Q)", min_value=0.0, format="Q %.2f")
         },
-        num_rows="dynamic",
-        use_container_width=True,
-        key=f"tabla_gastos_{st.session_state.reset_key}" 
+        num_rows="dynamic", use_container_width=True, key=f"tabla_gastos_{st.session_state.reset_key}" 
     )
 
     if st.button("✨ Autocompletar Categorías Vacías", type="secondary"):
         df_temp = gastos_editados.copy()
         hubo_cambios = False
-        
         for i, row in df_temp.iterrows():
             detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else ""
             categoria = row["Categoría"]
-            
             if detalle != "" and (pd.isna(categoria) or categoria is None or str(categoria).strip() == ""):
                 df_temp.at[i, "Categoría"] = autocompletar_categoria(detalle)
                 hubo_cambios = True
-        
         if hubo_cambios:
             st.session_state.gastos_df = df_temp
             st.rerun()
@@ -473,15 +441,12 @@ if opcion_menu == "📝 Registro de Corte":
     st.markdown("<br>", unsafe_allow_html=True)
     
     col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        btn_guardar = st.button("💾 Guardar Corte Completo", type="primary", use_container_width=True)
-    with col_btn2:
-        btn_limpiar = st.button("🧹 Limpiar / Nuevo Corte", type="secondary", use_container_width=True)
+    with col_btn1: btn_guardar = st.button("💾 Guardar Corte Completo", type="primary", use_container_width=True)
+    with col_btn2: btn_limpiar = st.button("🧹 Limpiar / Nuevo Corte", type="secondary", use_container_width=True)
 
     if btn_limpiar:
         df_limpio = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
-        for _ in range(11):
-            df_limpio.loc[len(df_limpio)] = [None, "", 0.0]
+        for _ in range(11): df_limpio.loc[len(df_limpio)] = [None, "", 0.0]
         st.session_state.gastos_df = df_limpio
         st.session_state.reset_key += 1
         if 'pdf_generado' in st.session_state:
@@ -493,22 +458,18 @@ if opcion_menu == "📝 Registro de Corte":
         if total_ingresos_bruto > 0 or total_gastos_calc > 0:
             corte_id = obtener_o_crear_corte(fecha_corte)
             ruta_id = df_rutas.loc[df_rutas['nombre'] == local_ruta, 'id'].values[0]
-            
             with conn.session as s:
                 if total_ingresos_bruto > 0:
                     s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total, credito_pagado, transferencias) VALUES (:c, :r, :v, :cp, :t)"), 
                               {"c": corte_id, "r": int(ruta_id), "v": venta_mostrador, "cp": pago_pedidos, "t": transferencias})
-                
                 for index, row in gastos_editados.iterrows():
                     monto = row["Monto (Q)"]
                     if monto > 0:
                         detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else "Gasto sin detalle"
                         categoria = row["Categoría"]
-                        
                         if pd.isna(categoria) or categoria is None or str(categoria).strip() == "":
                             categoria = autocompletar_categoria(detalle)
                             gastos_editados.at[index, "Categoría"] = categoria
-                            
                         if categoria in lista_categorias:
                             cat_id = df_categorias.loc[df_categorias['nombre'] == categoria, 'id'].values[0]
                             s.execute(text("INSERT INTO gastos (corte_id, categoria_id, detalle, monto) VALUES (:c, :cat, :d, :m)"), 
@@ -523,25 +484,16 @@ if opcion_menu == "📝 Registro de Corte":
             st.session_state['pdf_nombre'] = f"Corte_{fecha_corte.strftime('%d-%m-%Y')}.pdf"
             
             df_limpio = pd.DataFrame(columns=["Categoría", "Detalle", "Monto (Q)"])
-            for _ in range(11):
-                df_limpio.loc[len(df_limpio)] = [None, "", 0.0]
+            for _ in range(11): df_limpio.loc[len(df_limpio)] = [None, "", 0.0]
             st.session_state.gastos_df = df_limpio
             st.session_state.reset_key += 1
             st.rerun()
-            
         else:
             st.warning("⚠️ Debes ingresar al menos una venta o un gasto para guardar.")
             
     if 'pdf_generado' in st.session_state:
         st.markdown("---")
-        st.download_button(
-            label="📥 Descargar PDF del Corte para Imprimir",
-            data=st.session_state['pdf_generado'],
-            file_name=st.session_state['pdf_nombre'],
-            mime="application/pdf",
-            type="secondary",
-            use_container_width=True
-        )
+        st.download_button(label="📥 Descargar PDF del Corte para Imprimir", data=st.session_state['pdf_generado'], file_name=st.session_state['pdf_nombre'], mime="application/pdf", type="secondary", use_container_width=True)
 
 # ------------------------------------------
 # MÓDULO 2: HISTORIAL DE CORTES
@@ -549,12 +501,9 @@ if opcion_menu == "📝 Registro de Corte":
 elif opcion_menu == "📅 Historial de Cortes":
     st.title("📅 Consulta de Historial e Impresión")
     st.write("Selecciona un día para consultar el movimiento o reimprimir su PDF.")
-    
     fecha_consulta = st.date_input("Consultar fecha:", get_fecha_guate(), format="DD/MM/YYYY")
-    
     try:
         corte_data = conn.query(f"SELECT id FROM cortes_diarios WHERE fecha = '{fecha_consulta}'", ttl=0)
-        
         if not corte_data.empty:
             corte_id = corte_data.iloc[0]['id']
             ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos, i.transferencias as transferencias FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {corte_id}", ttl=0)
@@ -578,16 +527,10 @@ elif opcion_menu == "📅 Historial de Cortes":
             
             st.markdown("---")
             ruta_nombre = ingresos_hist.iloc[0]['ruta'] if not ingresos_hist.empty else "LOCAL MERCADO"
-            df_para_pdf = pd.DataFrame({
-                "Categoría": gastos_hist['categoria'] if not gastos_hist.empty else [],
-                "Detalle": gastos_hist['detalle'] if not gastos_hist.empty else [],
-                "Monto (Q)": gastos_hist['monto'] if not gastos_hist.empty else []
-            })
+            df_para_pdf = pd.DataFrame({"Categoría": gastos_hist['categoria'] if not gastos_hist.empty else [], "Detalle": gastos_hist['detalle'] if not gastos_hist.empty else [], "Monto (Q)": gastos_hist['monto'] if not gastos_hist.empty else []})
             
             pdf_historico = generar_pdf_corte(fecha_consulta.strftime('%d/%m/%Y'), ruta_nombre, "Histórico", df_para_pdf, sum_venta, sum_pedidos, sum_transferencias)
-            st.download_button(
-                label=f"📥 Descargar PDF del {fecha_consulta.strftime('%d/%m/%Y')} para Imprimir",
-                data=pdf_historico, file_name=f"Corte_{fecha_consulta.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="primary", use_container_width=True)
+            st.download_button(label=f"📥 Descargar PDF del {fecha_consulta.strftime('%d/%m/%Y')} para Imprimir", data=pdf_historico, file_name=f"Corte_{fecha_consulta.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="primary", use_container_width=True)
             
             st.markdown("---")
             col_t1, col_t2 = st.columns(2)
@@ -599,10 +542,8 @@ elif opcion_menu == "📅 Historial de Cortes":
                 st.subheader("💸 Desglose de Gastos")
                 if not gastos_hist.empty: st.dataframe(gastos_hist, use_container_width=True, hide_index=True)
                 else: st.info("No se registraron gastos este día.")
-        else:
-            st.warning(f"No hay ningún corte guardado en el sistema para la fecha {fecha_consulta.strftime('%d/%m/%Y')}.")
-    except Exception as e:
-        st.error("Error al consultar el historial.")
+        else: st.warning(f"No hay ningún corte guardado en el sistema para la fecha {fecha_consulta.strftime('%d/%m/%Y')}.")
+    except Exception as e: st.error("Error al consultar el historial.")
 
 # ------------------------------------------
 # MÓDULO 3: ESTADÍSTICAS
@@ -611,10 +552,7 @@ elif opcion_menu == "📈 Estadísticas":
     st.title("📈 Estadísticas y Finanzas")
     st.write("Filtra tus movimientos por mes para analizar el rendimiento del negocio.")
     
-    meses_dict = {
-        "Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, 
-        "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12
-    }
+    meses_dict = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
     hoy = get_fecha_guate()
     nombre_mes_actual = list(meses_dict.keys())[list(meses_dict.values()).index(hoy.month)]
     
@@ -624,19 +562,9 @@ elif opcion_menu == "📈 Estadísticas":
     mes_num = meses_dict[mes_seleccionado]
     
     try:
-        query_gastos = """
-            SELECT c.nombre as categoria, SUM(g.monto) as total 
-            FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id JOIN cortes_diarios cd ON g.corte_id = cd.id
-            WHERE EXTRACT(MONTH FROM cd.fecha) = :mes AND EXTRACT(YEAR FROM cd.fecha) = :anio
-            GROUP BY c.nombre
-        """
+        query_gastos = """SELECT c.nombre as categoria, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id JOIN cortes_diarios cd ON g.corte_id = cd.id WHERE EXTRACT(MONTH FROM cd.fecha) = :mes AND EXTRACT(YEAR FROM cd.fecha) = :anio GROUP BY c.nombre"""
         gastos_totales = conn.query(query_gastos, params={"mes": mes_num, "anio": anio_seleccionado}, ttl=0)
-        
-        query_ingresos = """
-            SELECT SUM(i.venta_total + COALESCE(i.credito_pagado, 0) + COALESCE(i.transferencias, 0)) as total_ingresos
-            FROM ingresos i JOIN cortes_diarios cd ON i.corte_id = cd.id
-            WHERE EXTRACT(MONTH FROM cd.fecha) = :mes AND EXTRACT(YEAR FROM cd.fecha) = :anio
-        """
+        query_ingresos = """SELECT SUM(i.venta_total + COALESCE(i.credito_pagado, 0) + COALESCE(i.transferencias, 0)) as total_ingresos FROM ingresos i JOIN cortes_diarios cd ON i.corte_id = cd.id WHERE EXTRACT(MONTH FROM cd.fecha) = :mes AND EXTRACT(YEAR FROM cd.fecha) = :anio"""
         ingresos_totales = conn.query(query_ingresos, params={"mes": mes_num, "anio": anio_seleccionado}, ttl=0)
         
         total_g = gastos_totales['total'].sum() if not gastos_totales.empty else 0.0
@@ -653,11 +581,8 @@ elif opcion_menu == "📈 Estadísticas":
         if not gastos_totales.empty and total_g > 0:
             fig = px.pie(gastos_totales, values='total', names='categoria', hole=0.4, title=f"Distribución de Gastos - {mes_seleccionado} {anio_seleccionado}")
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info(f"📊 No hay gastos registrados para el mes de {mes_seleccionado} {anio_seleccionado}.")
-            
-    except Exception as e:
-        st.error(f"Error al cargar las estadísticas: {e}")
+        else: st.info(f"📊 No hay gastos registrados para el mes de {mes_seleccionado} {anio_seleccionado}.")
+    except Exception as e: st.error(f"Error al cargar las estadísticas: {e}")
 
 # ------------------------------------------
 # MÓDULO 3.5: COMPARATIVA DIARIA
@@ -665,44 +590,24 @@ elif opcion_menu == "📈 Estadísticas":
 elif opcion_menu == "📆 Comparativa Diaria":
     st.title("📆 Comparativa de Ingresos vs Gastos por Día")
     st.write("Mira cuánto entró y cuánto salió exactamente cada día en el rango que elijas.")
-    
     hoy = get_fecha_guate()
     primer_dia_mes = hoy.replace(day=1)
-    
     col_d1, col_d2 = st.columns(2)
     fecha_inicio_comp = col_d1.date_input("Desde:", primer_dia_mes, format="DD/MM/YYYY")
     fecha_fin_comp = col_d2.date_input("Hasta:", hoy, format="DD/MM/YYYY")
-    
     if st.button("🔍 Consultar Días", type="primary"):
         with st.spinner("Cargando los datos día por día..."):
             try:
-                q_ing = """
-                    SELECT cd.fecha, 
-                           SUM(COALESCE(i.venta_total, 0) + COALESCE(i.credito_pagado, 0) + COALESCE(i.transferencias, 0)) as ingresos
-                    FROM cortes_diarios cd
-                    LEFT JOIN ingresos i ON cd.id = i.corte_id
-                    WHERE cd.fecha BETWEEN :inicio AND :fin
-                    GROUP BY cd.fecha
-                """
+                q_ing = """SELECT cd.fecha, SUM(COALESCE(i.venta_total, 0) + COALESCE(i.credito_pagado, 0) + COALESCE(i.transferencias, 0)) as ingresos FROM cortes_diarios cd LEFT JOIN ingresos i ON cd.id = i.corte_id WHERE cd.fecha BETWEEN :inicio AND :fin GROUP BY cd.fecha"""
                 df_ing = conn.query(q_ing, params={"inicio": fecha_inicio_comp, "fin": fecha_fin_comp}, ttl=0)
-                
-                q_gas = """
-                    SELECT cd.fecha, SUM(COALESCE(g.monto, 0)) as gastos
-                    FROM cortes_diarios cd
-                    LEFT JOIN gastos g ON cd.id = g.corte_id
-                    WHERE cd.fecha BETWEEN :inicio AND :fin
-                    GROUP BY cd.fecha
-                """
+                q_gas = """SELECT cd.fecha, SUM(COALESCE(g.monto, 0)) as gastos FROM cortes_diarios cd LEFT JOIN gastos g ON cd.id = g.corte_id WHERE cd.fecha BETWEEN :inicio AND :fin GROUP BY cd.fecha"""
                 df_gas = conn.query(q_gas, params={"inicio": fecha_inicio_comp, "fin": fecha_fin_comp}, ttl=0)
-                
-                if df_ing.empty and df_gas.empty:
-                    st.warning("No hay registros en esas fechas.")
+                if df_ing.empty and df_gas.empty: st.warning("No hay registros en esas fechas.")
                 else:
                     df_resumen = pd.merge(df_ing, df_gas, on='fecha', how='outer').fillna(0)
                     df_resumen['fecha'] = pd.to_datetime(df_resumen['fecha']).dt.date
                     df_resumen = df_resumen.sort_values('fecha')
                     df_resumen['utilidad'] = df_resumen['ingresos'] - df_resumen['gastos']
-                    
                     t_ing = df_resumen['ingresos'].sum()
                     t_gas = df_resumen['gastos'].sum()
                     t_uti = df_resumen['utilidad'].sum()
@@ -716,44 +621,82 @@ elif opcion_menu == "📆 Comparativa Diaria":
                     
                     st.subheader("📊 Gráfica de Movimientos Diarios")
                     df_graf = df_resumen[['fecha', 'ingresos', 'gastos']].melt(id_vars='fecha', var_name='Tipo', value_name='Monto')
-                    fig = px.bar(
-                        df_graf, 
-                        x='fecha', 
-                        y='Monto', 
-                        color='Tipo', 
-                        barmode='group', 
-                        color_discrete_map={'ingresos': '#27AE60', 'gastos': '#E74C3C'}
-                    )
+                    fig = px.bar(df_graf, x='fecha', y='Monto', color='Tipo', barmode='group', color_discrete_map={'ingresos': '#27AE60', 'gastos': '#E74C3C'})
                     st.plotly_chart(fig, use_container_width=True)
                     
                     st.subheader("📋 Detalle de cada día")
-                    st.dataframe(
-                        df_resumen,
-                        column_config={
-                            "fecha": st.column_config.DateColumn("Fecha del Corte", format="DD/MM/YYYY"),
-                            "ingresos": st.column_config.NumberColumn("Total Ingresos (Efec + Fri)", format="Q %.2f"),
-                            "gastos": st.column_config.NumberColumn("Total Gastos", format="Q %.2f"),
-                            "utilidad": st.column_config.NumberColumn("Utilidad Neta", format="Q %.2f")
-                        },
-                        hide_index=True,
-                        use_container_width=True
-                    )
-                    
+                    st.dataframe(df_resumen, column_config={"fecha": st.column_config.DateColumn("Fecha del Corte", format="DD/MM/YYYY"), "ingresos": st.column_config.NumberColumn("Total Ingresos (Efec + Fri)", format="Q %.2f"), "gastos": st.column_config.NumberColumn("Total Gastos", format="Q %.2f"), "utilidad": st.column_config.NumberColumn("Utilidad Neta", format="Q %.2f")}, hide_index=True, use_container_width=True)
                     st.markdown("---")
                     
-                    # Generar PDF Comparativa y Botón de Descarga
                     pdf_comparativa = generar_pdf_comparativa_diaria(fecha_inicio_comp, fecha_fin_comp, df_resumen, t_ing, t_gas, t_uti)
-                    st.download_button(
-                        label="📥 Descargar Comparativa en PDF",
-                        data=pdf_comparativa,
-                        file_name=f"Comparativa_Diaria_{fecha_inicio_comp.strftime('%d-%m-%Y')}_al_{fecha_fin_comp.strftime('%d-%m-%Y')}.pdf",
-                        mime="application/pdf",
-                        type="secondary",
-                        use_container_width=True
-                    )
+                    st.download_button(label="📥 Descargar Comparativa en PDF", data=pdf_comparativa, file_name=f"Comparativa_Diaria_{fecha_inicio_comp.strftime('%d-%m-%Y')}_al_{fecha_fin_comp.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
+            except Exception as e: st.error(f"Error al cargar la comparativa: {e}")
+
+# ------------------------------------------
+# MÓDULO 3.8: DÍAS ESTRELLA (RENDIMIENTO POR DÍA)
+# ------------------------------------------
+elif opcion_menu == "🏆 Días Estrella":
+    st.title("🏆 Días Estrella (Rendimiento Semanal)")
+    st.write("Descubre qué día de la semana tiene las mejores ventas y cuál es el más flojo para optimizar tu producción de pan.")
+    
+    hoy = get_fecha_guate()
+    primer_dia_mes = hoy.replace(day=1)
+    
+    col_d1, col_d2 = st.columns(2)
+    fecha_inicio_est = col_d1.date_input("Desde:", primer_dia_mes, format="DD/MM/YYYY", key="fecha_est_1")
+    fecha_fin_est = col_d2.date_input("Hasta:", hoy, format="DD/MM/YYYY", key="fecha_est_2")
+
+    if st.button("📊 Analizar Días", type="primary"):
+        with st.spinner("Buscando el mejor día..."):
+            try:
+                q_ing_dias = """
+                    SELECT cd.fecha, 
+                           SUM(COALESCE(i.venta_total, 0) + COALESCE(i.credito_pagado, 0) + COALESCE(i.transferencias, 0)) as ingresos
+                    FROM cortes_diarios cd
+                    LEFT JOIN ingresos i ON cd.id = i.corte_id
+                    WHERE cd.fecha BETWEEN :inicio AND :fin
+                    GROUP BY cd.fecha
+                """
+                df_ing_dias = conn.query(q_ing_dias, params={"inicio": fecha_inicio_est, "fin": fecha_fin_est}, ttl=0)
+
+                if df_ing_dias.empty or df_ing_dias['ingresos'].sum() == 0:
+                    st.warning("No hay ventas registradas en ese rango para hacer el análisis.")
+                else:
+                    dias_espanol = {'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles', 'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'}
+                    df_ing_dias['fecha'] = pd.to_datetime(df_ing_dias['fecha'])
+                    df_ing_dias['nombre_dia'] = df_ing_dias['fecha'].dt.day_name().map(dias_espanol)
+                    
+                    df_agrupado = df_ing_dias.groupby('nombre_dia', as_index=False)['ingresos'].mean()
+                    df_agrupado = df_agrupado.rename(columns={'ingresos': 'promedio_ventas'})
+                    
+                    orden_dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+                    df_agrupado['nombre_dia'] = pd.Categorical(df_agrupado['nombre_dia'], categories=orden_dias, ordered=True)
+                    df_agrupado = df_agrupado.sort_values('nombre_dia')
+
+                    mejor_dia_nombre = df_agrupado.loc[df_agrupado['promedio_ventas'].idxmax()]['nombre_dia']
+                    peor_dia_nombre = df_agrupado.loc[df_agrupado['promedio_ventas'].idxmin()]['nombre_dia']
+                    promedio_general = df_ing_dias['ingresos'].mean()
+                    dia_record = df_ing_dias.loc[df_ing_dias['ingresos'].idxmax()]
+                    
+                    st.markdown("---")
+                    st.markdown("### 🥇 Resultados del Análisis")
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    col1.metric("🔥 Mejor Día de la Semana", str(mejor_dia_nombre))
+                    col2.metric("💤 Día más Flojo", str(peor_dia_nombre))
+                    col3.metric("📊 Venta Promedio Diaria", f"Q {promedio_general:,.2f}")
+                    col4.metric("👑 Día Récord (Fecha Exacta)", f"{dia_record['fecha'].strftime('%d/%m/%Y')}", f"Q {dia_record['ingresos']:,.2f}")
+                    st.markdown("---")
+
+                    st.subheader(f"📈 Gráfica de Promedio de Ventas (Lunes a Domingo)")
+                    fig = px.bar(df_agrupado, x='nombre_dia', y='promedio_ventas', labels={'nombre_dia': 'Día de la Semana', 'promedio_ventas': 'Promedio Vendido (Q)'}, color='promedio_ventas', color_continuous_scale=px.colors.sequential.Viridis)
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    st.subheader("📋 Tabla de Promedios")
+                    st.dataframe(df_agrupado, column_config={"nombre_dia": "Día de la Semana", "promedio_ventas": st.column_config.NumberColumn("Promedio de Ingresos", format="Q %.2f")}, hide_index=True, use_container_width=True)
                     
             except Exception as e:
-                st.error(f"Error al cargar la comparativa: {e}")
+                st.error(f"Error al cargar el análisis: {e}")
 
 # ------------------------------------------
 # MÓDULO 4: PROVEEDORES
@@ -841,49 +784,18 @@ elif opcion_menu == "📊 Reporte PDF Mensual":
     if st.button("📑 Generar Reporte PDF", type="primary"):
         with st.spinner("Calculando agrupaciones y dibujando gráficas..."):
             try:
-                query_ing = """
-                    SELECT SUM(i.venta_total) as efectivo, SUM(COALESCE(i.credito_pagado, 0)) as pedidos, SUM(COALESCE(i.transferencias, 0)) as transferencias
-                    FROM ingresos i
-                    JOIN cortes_diarios cd ON i.corte_id = cd.id
-                    WHERE cd.fecha BETWEEN :inicio AND :fin
-                """
+                query_ing = """SELECT SUM(i.venta_total) as efectivo, SUM(COALESCE(i.credito_pagado, 0)) as pedidos, SUM(COALESCE(i.transferencias, 0)) as transferencias FROM ingresos i JOIN cortes_diarios cd ON i.corte_id = cd.id WHERE cd.fecha BETWEEN :inicio AND :fin"""
                 ingresos_df = conn.query(query_ing, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
                 
-                query_cat = """
-                    SELECT c.nombre as categoria, SUM(g.monto) as total
-                    FROM gastos g
-                    JOIN categorias_gasto c ON g.categoria_id = c.id
-                    JOIN cortes_diarios cd ON g.corte_id = cd.id
-                    WHERE cd.fecha BETWEEN :inicio AND :fin
-                    GROUP BY c.nombre
-                    ORDER BY total DESC
-                """
+                query_cat = """SELECT c.nombre as categoria, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id JOIN cortes_diarios cd ON g.corte_id = cd.id WHERE cd.fecha BETWEEN :inicio AND :fin GROUP BY c.nombre ORDER BY total DESC"""
                 gastos_cat_df = conn.query(query_cat, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
                 
-                query_det = """
-                    SELECT c.nombre as categoria, LOWER(g.detalle) as detalle, SUM(g.monto) as total
-                    FROM gastos g
-                    JOIN categorias_gasto c ON g.categoria_id = c.id
-                    JOIN cortes_diarios cd ON g.corte_id = cd.id
-                    WHERE cd.fecha BETWEEN :inicio AND :fin
-                    GROUP BY c.nombre, LOWER(g.detalle)
-                    ORDER BY c.nombre, total DESC
-                """
+                query_det = """SELECT c.nombre as categoria, LOWER(g.detalle) as detalle, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id JOIN cortes_diarios cd ON g.corte_id = cd.id WHERE cd.fecha BETWEEN :inicio AND :fin GROUP BY c.nombre, LOWER(g.detalle) ORDER BY c.nombre, total DESC"""
                 gastos_det_df = conn.query(query_det, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
                 
                 if (not ingresos_df.empty and ingresos_df['efectivo'].sum() > 0) or not gastos_cat_df.empty:
                     buffer_pdf = generar_pdf_reporte_mensual(fecha_inicio, fecha_fin, ingresos_df, gastos_cat_df, gastos_det_df)
                     st.success("✅ ¡Tu Reporte Gerencial ha sido generado con éxito!")
-                    st.download_button(
-                        label="📥 Descargar Reporte PDF",
-                        data=buffer_pdf,
-                        file_name=f"Reporte_Panaderia_{fecha_inicio.strftime('%d-%m-%Y')}_al_{fecha_fin.strftime('%d-%m-%Y')}.pdf",
-                        mime="application/pdf",
-                        type="secondary",
-                        use_container_width=True
-                    )
-                else:
-                    st.warning(f"⚠️ No se encontraron registros de ventas ni gastos entre el {fecha_inicio.strftime('%d/%m/%Y')} y el {fecha_fin.strftime('%d/%m/%Y')}.")
-                    
-            except Exception as e:
-                st.error(f"Error al generar el reporte: {e}")
+                    st.download_button(label="📥 Descargar Reporte PDF", data=buffer_pdf, file_name=f"Reporte_Panaderia_{fecha_inicio.strftime('%d-%m-%Y')}_al_{fecha_fin.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
+                else: st.warning(f"⚠️ No se encontraron registros de ventas ni gastos entre el {fecha_inicio.strftime('%d/%m/%Y')} y el {fecha_fin.strftime('%d/%m/%Y')}.")
+            except Exception as e: st.error(f"Error al generar el reporte: {e}")
