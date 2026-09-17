@@ -220,7 +220,6 @@ def generar_pdf_recibo(num_recibo, fecha_emision, panadero, f_inicio, f_fin, qq_
     concept_data = [[Paragraph("Por Concepto De:", center_bold)], [Paragraph(f"Salario correspondiente del {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')} a favor de {panadero.upper()}", ParagraphStyle('C', alignment=1, fontSize=12))]]; t_concept = Table(concept_data, colWidths=[530]); t_concept.setStyle(TableStyle([('BACKGROUND', (0,0), (0,0), colors.lightgrey), ('BOX', (0,0), (-1,-1), 1.5, colors.black), ('GRID', (0,0), (-1,-1), 0.5, colors.black), ('BOTTOMPADDING', (0,0), (-1,-1), 8), ('TOPPADDING', (0,0), (-1,-1), 8)])); elements.append(t_concept)
     calc_data = [[f"{qq_total:.2f}", "", ""], ["Quintalaje", f"Q {precio_qq:.2f}", f"Q {subtotal:,.2f}"], ["Septimo", "", f"{septimo:,.2f}"], ["tortas", "", f"{tortas:,.2f}"], ["(-) Tienda", "", f"{tienda:,.2f}"], ["Total A Pagar", "Q", f"{total_pagar:,.2f}"]]; t_calc = Table(calc_data, colWidths=[330, 80, 120]); t_calc.setStyle(TableStyle([('ALIGN', (0,0), (0,-1), 'RIGHT'), ('ALIGN', (1,0), (1,-1), 'CENTER'), ('ALIGN', (2,0), (2,-1), 'RIGHT'), ('FONTNAME', (0,0), (-1,-1), 'Helvetica'), ('FONTNAME', (0,1), (0,1), 'Helvetica-Bold'), ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'), ('BOX', (0,0), (0,0), 1, colors.black), ('BOX', (1,1), (1,1), 1, colors.black), ('BOX', (2,1), (2,-1), 1, colors.black), ('GRID', (2,1), (2,-1), 0.5, colors.black), ('BOX', (0,0), (-1,-1), 1.5, colors.black)])); elements.append(t_calc); elements.append(Spacer(1, 60)); elements.append(Paragraph("__________________________________________", ParagraphStyle('firma', alignment=1))); elements.append(Paragraph(f"Firma de Recibido - {panadero.upper()}", ParagraphStyle('firma', alignment=1))); doc.build(elements); buffer.seek(0); return buffer
 
-
 # ==========================================
 # 4. MENÚ LATERAL (SIDEBAR)
 # ==========================================
@@ -256,7 +255,7 @@ with st.sidebar:
 # ==========================================
 
 # ------------------------------------------
-# MÓDULO: 🚚 RUTA Y PEDIDOS (XML) 
+# MÓDULO: 🚚 RUTA Y PEDIDOS (XML)
 # ------------------------------------------
 if opcion_menu == "🚚 Ruta y Pedidos (XML)":
     st.title("🚚 Control de Ruta y Pedidos (Lector SAT)")
@@ -269,6 +268,7 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
         "⚙️ 5. Configurar Sucursales"
     ])
     
+    # Listas dinámicas para la UI
     def obtener_lista_sucursales():
         try:
             df_suc = conn.query("SELECT nombre FROM sucursales_oasis ORDER BY nombre", ttl=0)
@@ -276,6 +276,14 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                 return df_suc['nombre'].tolist() + ["Otra Sucursal Oasis"]
         except Exception: pass
         return ["Oasis Jocotan", "Oasis Zacapa", "Oasis Teculutan", "Quali Usumatlan", "Quali San Jorge Zacapa", "Oasis Chiquimula Octava", "Oasis Chiquimula Decima", "Quali El Molino Chiquimula", "Otra Sucursal Oasis"]
+
+    def obtener_lista_comunes():
+        try:
+            df_suc = conn.query("SELECT nombre FROM sucursales_comunes ORDER BY nombre", ttl=0)
+            if not df_suc.empty:
+                return df_suc['nombre'].tolist() + ["Cliente Particular / Otro"]
+        except Exception: pass
+        return ["Gasolinera Shell", "Gasolinera Texaco", "Tienda La Blanquita", "Cliente Particular / Otro"]
 
     with tab_xml:
         st.markdown("Sube tu archivo `.xml` generado por la SAT para extraer automáticamente los productos.")
@@ -315,7 +323,7 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                     else:
                         sucursal_final = sucursal_seleccionada
                 else:
-                    opciones_comunes = ["Gasolinera Shell", "Gasolinera Texaco", "Tienda La Blanquita", "Cliente Particular / Otro"]
+                    opciones_comunes = obtener_lista_comunes() # <-- Lista dinámica para contado
                     sucursal_seleccionada = col_suc1.selectbox("Tipo de Cliente / Destino:", opciones_comunes)
                     if sucursal_seleccionada == "Cliente Particular / Otro":
                         sucursal_final = col_suc2.text_input("Escribe el nombre del negocio:", value=cliente_nombre_sat)
@@ -343,7 +351,6 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                     df_pan = df_xml[df_xml['Categoría'] == 'Pan / Repostería']
                     df_pasta = df_xml[df_xml['Categoría'] == 'Pasta / Salado']
                     
-                    # Convertidos a float() nativo de Python para evitar el error psycopg2 InvalidSchemaName np.float64
                     tot_pan = float(df_pan['Total (Q)'].sum()) if not df_pan.empty else 0.0
                     tot_pasta = float(df_pasta['Total (Q)'].sum()) if not df_pasta.empty else 0.0
                     gran_total = float(df_xml['Total (Q)'].sum()) if not df_xml.empty else 0.0
@@ -429,55 +436,44 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                 st.dataframe(df_mostrar_rutas[['fecha_factura', 'sucursal', 'cliente', 'total_pan', 'total_pasta', 'gran_total']], column_config={"fecha_factura": "Fecha", "sucursal": "Sucursal / Destino", "cliente": "Razón Social SAT", "total_pan": st.column_config.NumberColumn("Total Pan (Q)", format="Q %.2f"), "total_pasta": st.column_config.NumberColumn("Total Pasta (Q)", format="Q %.2f"), "gran_total": st.column_config.NumberColumn("Total Factura (Q)", format="Q %.2f")}, hide_index=True, use_container_width=True)
                 
                 st.markdown("---")
-                
-                # --- NUEVA FUNCIÓN PARA EDITAR O BORRAR FACTURAS EQUIVOCADAS ---
                 col_edit, col_del = st.columns(2)
-                
-                # EDITAR SUCURSAL
                 with col_edit:
                     st.markdown("#### ✏️ Corregir Sucursal")
-                    st.write("Si te equivocaste de sucursal al guardar, cámbiala aquí:")
                     opciones_edit = df_rutas_hist.apply(lambda row: f"ID: {row['id']} | Fecha: {pd.to_datetime(row['fecha_factura']).strftime('%d/%m/%Y')} | Sucursal actual: {row.get('sucursal', row['cliente'])}", axis=1).tolist()
                     ruta_a_editar = st.selectbox("Selecciona la factura:", opciones_edit, key="sel_edit")
-                    nueva_suc_correcta = st.selectbox("Nueva Sucursal Correcta:", obtener_lista_sucursales())
                     
+                    # Identificar si es oasis para mostrar la lista correcta en la edición
+                    idx_edit_temp = opciones_edit.index(ruta_a_editar)
+                    datos_edit_temp = df_rutas_hist.iloc[idx_edit_temp]
+                    es_oasis_edit = ("ORIENTE" in datos_edit_temp['cliente'].upper() or "OASIS" in datos_edit_temp['cliente'].upper() or "QUALY" in datos_edit_temp['cliente'].upper())
+                    
+                    if es_oasis_edit: nueva_suc_correcta = st.selectbox("Nueva Sucursal Correcta:", obtener_lista_sucursales())
+                    else: nueva_suc_correcta = st.selectbox("Nueva Sucursal Correcta:", obtener_lista_comunes())
+
                     if st.button("💾 Guardar Corrección", type="primary"):
                         idx_edit = opciones_edit.index(ruta_a_editar)
                         datos_edit = df_rutas_hist.iloc[idx_edit]
-                        
-                        id_edit = int(datos_edit['id'])
-                        f_edit = datos_edit['fecha_factura']
-                        m_edit = float(datos_edit['total_pan'])
-                        suc_vieja = datos_edit.get('sucursal', datos_edit['cliente'])
-                        cli_nombre_edit = datos_edit['cliente']
-                        
+                        id_edit = int(datos_edit['id']); f_edit = datos_edit['fecha_factura']; m_edit = float(datos_edit['total_pan']); suc_vieja = datos_edit.get('sucursal', datos_edit['cliente']); cli_nombre_edit = datos_edit['cliente']
                         with conn.session as s:
                             s.execute(text("UPDATE control_rutas SET sucursal = :ns WHERE id = :id"), {"ns": nueva_suc_correcta, "id": id_edit})
-                            if "ORIENTE" in cli_nombre_edit.upper() or "OASIS" in cli_nombre_edit.upper() or "QUALY" in cli_nombre_edit.upper():
-                                s.execute(text("UPDATE cuenta_ruta_jeny SET detalle = :nd WHERE tipo = 'CARGO' AND fecha = :f AND monto = :m AND detalle = :vd"), 
-                                          {"nd": f"Pan - {nueva_suc_correcta}", "f": f_edit, "m": m_edit, "vd": f"Pan - {suc_vieja}"})
+                            if es_oasis_edit:
+                                s.execute(text("UPDATE cuenta_ruta_jeny SET detalle = :nd WHERE tipo = 'CARGO' AND fecha = :f AND monto = :m AND detalle = :vd"), {"nd": f"Pan - {nueva_suc_correcta}", "f": f_edit, "m": m_edit, "vd": f"Pan - {suc_vieja}"})
                             s.commit()
-                        st.success("✅ ¡Sucursal corregida con éxito!")
-                        st.rerun()
+                        st.success("✅ ¡Sucursal corregida con éxito!"); st.rerun()
 
-                # ELIMINAR FACTURA
                 with col_del:
                     st.markdown("#### 🗑️ Eliminar Factura")
-                    st.write("Si el XML es incorrecto, bórralo por completo del sistema.")
                     opciones_borrar = df_rutas_hist.apply(lambda row: f"ID: {row['id']} | Fecha: {pd.to_datetime(row['fecha_factura']).strftime('%d/%m/%Y')} | Total: Q {row['gran_total']}", axis=1).tolist()
                     ruta_a_borrar = st.selectbox("Selecciona para eliminar:", opciones_borrar, key="sel_del")
-                    
                     if st.button("🗑️ Eliminar Definitivamente", type="secondary"):
-                        idx_del = opciones_borrar.index(ruta_a_borrar)
-                        datos_del = df_rutas_hist.iloc[idx_del]
+                        idx_del = opciones_borrar.index(ruta_a_borrar); datos_del = df_rutas_hist.iloc[idx_del]
                         id_del = int(datos_del['id']); f_del = datos_del['fecha_factura']; m_del = float(datos_del['total_pan']); cli_del = datos_del['cliente']
                         with conn.session as s:
                             s.execute(text("DELETE FROM control_rutas WHERE id = :id"), {"id": id_del})
                             if "ORIENTE" in cli_del.upper() or "OASIS" in cli_del.upper() or "QUALY" in cli_del.upper():
                                 s.execute(text("DELETE FROM cuenta_ruta_jeny WHERE tipo = 'CARGO' AND fecha = :f AND monto = :m"), {"f": f_del, "m": m_del})
                             s.commit()
-                        st.success("✅ ¡Factura (y deuda) eliminadas!")
-                        st.rerun()
+                        st.success("✅ ¡Factura (y deuda) eliminadas!"); st.rerun()
             else: st.info("No hay rutas guardadas todavía.")
         except Exception as e: st.caption(f"Error al cargar historial: {e}")
 
@@ -489,15 +485,13 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                 if 'sucursal' not in df_analisis.columns: df_analisis['sucursal'] = df_analisis['cliente']
                 else: df_analisis['sucursal'] = df_analisis['sucursal'].fillna(df_analisis['cliente'])
                 resumen_sucursal = df_analisis.groupby('sucursal', as_index=False).agg({'total_pan': 'sum', 'total_pasta': 'sum', 'gran_total': 'sum'}).sort_values('gran_total', ascending=False)
-                sucursal_top = resumen_sucursal.iloc[0]['sucursal']
-                total_top = float(resumen_sucursal.iloc[0]['gran_total'])
+                sucursal_top = resumen_sucursal.iloc[0]['sucursal']; total_top = float(resumen_sucursal.iloc[0]['gran_total'])
                 
                 col_m1, col_m2 = st.columns(2)
                 col_m1.metric("👑 Sucursal Estrella (Mayor Compra)", f"{sucursal_top}", f"Q {total_top:,.2f}")
                 col_m2.metric("📦 Total Facturado en Todas las Rutas", f"Q {float(resumen_sucursal['gran_total'].sum()):,.2f}")
                 
-                st.markdown("---")
-                st.subheader("📈 Gráfica: Pan vs Pasta de Pollo por Sucursal")
+                st.markdown("---"); st.subheader("📈 Gráfica: Pan vs Pasta de Pollo por Sucursal")
                 df_graf_suc = resumen_sucursal.melt(id_vars='sucursal', value_vars=['total_pan', 'total_pasta'], var_name='Producto', value_name='Total_Q')
                 df_graf_suc['Producto'] = df_graf_suc['Producto'].map({'total_pan': 'Panadería', 'total_pasta': 'Pasta de Pollo'})
                 fig_suc = px.bar(df_graf_suc, x='sucursal', y='Total_Q', color='Producto', barmode='group', labels={'sucursal': 'Sucursal / Cliente', 'Total_Q': 'Total Comprado (Q)'}, color_discrete_map={'Panadería': '#F39C12', 'Pasta de Pollo': '#E74C3C'})
@@ -508,45 +502,83 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
             else: st.info("Sube facturas en la pestaña 1 para ver las estadísticas de tus sucursales.")
         except Exception as e: st.error(f"Error al calcular estadísticas: {e}")
 
+    # --- PESTAÑA 5: CONFIGURAR SUCURSALES (ACTUALIZADA) ---
     with tab_config_sucursales:
-        st.markdown("### ⚙️ Administrar Sucursales de Oasis / Qualy")
-        st.write("Agrega, edita o elimina los nombres de las sucursales que aparecen en la lista desplegable al momento de subir una factura de la ruta.")
+        st.markdown("### ⚙️ Administrar Sucursales y Clientes")
+        st.write("Agrega, edita o elimina los nombres que aparecen en las listas desplegables al momento de subir una factura.")
         
-        try:
-            with st.expander("➕ Agregar Nueva Sucursal"):
-                with st.form("form_nueva_sucursal", clear_on_submit=True):
-                    nueva_sucursal = st.text_input("Nombre de la nueva sucursal (Ej. Oasis Zacapa 2)")
-                    if st.form_submit_button("Guardar Sucursal"):
+        # Dividimos en dos columnas grandes
+        col_oasis, col_comun = st.columns(2)
+        
+        # --- LADO IZQUIERDO: OASIS ---
+        with col_oasis:
+            st.markdown("#### 🍞 Oasis / Qualy (Cuenta Jeny)")
+            st.info("Estas sucursales generan DEUDA automáticamente.")
+            with st.expander("➕ Agregar Oasis"):
+                with st.form("form_nuevo_oasis", clear_on_submit=True):
+                    nueva_sucursal = st.text_input("Nombre (Ej. Oasis Zacapa 2)")
+                    if st.form_submit_button("Guardar"):
                         if nueva_sucursal.strip() != "":
                             with conn.session as s:
                                 s.execute(text("INSERT INTO sucursales_oasis (nombre) VALUES (:n)"), {"n": nueva_sucursal.strip()})
                                 s.commit()
-                            st.success(f"✅ Sucursal '{nueva_sucursal}' agregada exitosamente.")
-                            st.rerun()
-                        else: st.warning("Debes escribir un nombre válido.")
+                            st.success(f"✅ Agregado."); st.rerun()
             
-            df_sucursales_edit = conn.query("SELECT id, nombre FROM sucursales_oasis ORDER BY id", ttl=0)
-            if not df_sucursales_edit.empty:
-                st.markdown("#### ✏️ Editar Sucursales Existentes")
-                sucursales_editadas = st.data_editor(df_sucursales_edit, column_config={"id": st.column_config.NumberColumn("ID", disabled=True), "nombre": st.column_config.TextColumn("Nombre de la Sucursal", required=True)}, hide_index=True, use_container_width=True)
-                if st.button("💾 Guardar Cambios de Nombres", type="primary"):
-                    with conn.session as s:
-                        for index, row in sucursales_editadas.iterrows(): s.execute(text("UPDATE sucursales_oasis SET nombre = :n WHERE id = :id"), {"n": row["nombre"], "id": int(row["id"])})
-                        s.commit()
-                    st.success("✅ Nombres actualizados correctamente."); st.rerun()
-                    
-                st.markdown("---")
-                st.markdown("#### 🗑️ Eliminar Sucursal")
-                suc_a_borrar = st.selectbox("Selecciona la sucursal que deseas quitar de la lista:", df_sucursales_edit['nombre'])
-                if st.button("Eliminar Sucursal Seleccionada"):
-                    id_borrar = df_sucursales_edit.loc[df_sucursales_edit['nombre'] == suc_a_borrar, 'id'].values[0]
-                    with conn.session as s: s.execute(text("DELETE FROM sucursales_oasis WHERE id = :id"), {"id": int(id_borrar)}); s.commit()
-                    st.success("🗑️ Sucursal eliminada de la lista desplegable."); st.rerun()
-            else: st.info("No hay sucursales configuradas. Usa el panel de arriba para agregar una.")
-        except Exception as e: st.error(f"⚠️ Debes crear la tabla 'sucursales_oasis' en tu base de datos Neon. Revisa el Paso 1.")
+            try:
+                df_sucursales_edit = conn.query("SELECT id, nombre FROM sucursales_oasis ORDER BY id", ttl=0)
+                if not df_sucursales_edit.empty:
+                    st.caption("✏️ Editar Nombres")
+                    sucursales_editadas = st.data_editor(df_sucursales_edit, column_config={"id": None, "nombre": st.column_config.TextColumn("Nombre", required=True)}, hide_index=True, use_container_width=True, key="edit_oasis")
+                    if st.button("💾 Guardar Oasis", type="primary"):
+                        with conn.session as s:
+                            for index, row in sucursales_editadas.iterrows(): s.execute(text("UPDATE sucursales_oasis SET nombre = :n WHERE id = :id"), {"n": row["nombre"], "id": int(row["id"])})
+                            s.commit()
+                        st.success("✅ Nombres actualizados."); st.rerun()
+                        
+                    st.caption("🗑️ Eliminar")
+                    suc_a_borrar = st.selectbox("Quitar de la lista:", df_sucursales_edit['nombre'], key="del_oasis")
+                    if st.button("Eliminar Oasis Seleccionado"):
+                        id_borrar = df_sucursales_edit.loc[df_sucursales_edit['nombre'] == suc_a_borrar, 'id'].values[0]
+                        with conn.session as s: s.execute(text("DELETE FROM sucursales_oasis WHERE id = :id"), {"id": int(id_borrar)}); s.commit()
+                        st.success("🗑️ Eliminado."); st.rerun()
+            except: pass
+
+        # --- LADO DERECHO: CONTADO / COMUNES ---
+        with col_comun:
+            st.markdown("#### ⛽ Clientes de Contado (XML)")
+            st.info("Estos clientes suman dinero DIRECTO a las estadísticas.")
+            with st.expander("➕ Agregar Cliente"):
+                with st.form("form_nuevo_comun", clear_on_submit=True):
+                    nuevo_comun = st.text_input("Nombre (Ej. Despensa Familiar)")
+                    if st.form_submit_button("Guardar"):
+                        if nuevo_comun.strip() != "":
+                            try:
+                                with conn.session as s:
+                                    s.execute(text("INSERT INTO sucursales_comunes (nombre) VALUES (:n)"), {"n": nuevo_comun.strip()})
+                                    s.commit()
+                                st.success(f"✅ Agregado."); st.rerun()
+                            except: st.error("Falta la tabla sucursales_comunes en Neon.")
+            try:
+                df_comunes_edit = conn.query("SELECT id, nombre FROM sucursales_comunes ORDER BY id", ttl=0)
+                if not df_comunes_edit.empty:
+                    st.caption("✏️ Editar Nombres")
+                    comunes_editadas = st.data_editor(df_comunes_edit, column_config={"id": None, "nombre": st.column_config.TextColumn("Nombre", required=True)}, hide_index=True, use_container_width=True, key="edit_comunes")
+                    if st.button("💾 Guardar Clientes", type="primary"):
+                        with conn.session as s:
+                            for index, row in comunes_editadas.iterrows(): s.execute(text("UPDATE sucursales_comunes SET nombre = :n WHERE id = :id"), {"n": row["nombre"], "id": int(row["id"])})
+                            s.commit()
+                        st.success("✅ Nombres actualizados."); st.rerun()
+                        
+                    st.caption("🗑️ Eliminar")
+                    comun_a_borrar = st.selectbox("Quitar de la lista:", df_comunes_edit['nombre'], key="del_comunes")
+                    if st.button("Eliminar Cliente Seleccionado"):
+                        id_borrar = df_comunes_edit.loc[df_comunes_edit['nombre'] == comun_a_borrar, 'id'].values[0]
+                        with conn.session as s: s.execute(text("DELETE FROM sucursales_comunes WHERE id = :id"), {"id": int(id_borrar)}); s.commit()
+                        st.success("🗑️ Eliminado."); st.rerun()
+            except: pass
 
 # ------------------------------------------
-# MÓDULOS DE REGISTRO, HISTORIAL, ESTADÍSTICAS, COMPARATIVA, DÍAS ESTRELLA, PROVEEDORES, PLANILLA Y REPORTE MENSUAL
+# (EL RESTO DE MÓDULOS DE REGISTRO, HISTORIAL, ESTADÍSTICAS, COMPARATIVA, DÍAS ESTRELLA, PROVEEDORES, PLANILLA Y REPORTE MENSUAL SE MANTIENEN EXACTAMENTE IGUAL)
 # ------------------------------------------
 elif opcion_menu == "📝 Registro de Corte":
     st.title("🍞 Ingreso Diario de Corte")
