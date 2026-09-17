@@ -157,11 +157,17 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_ef
     t_resumen = Table(resumen_data, colWidths=[340, 200]); t_resumen.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('ALIGN', (0,0), (-1,-1), 'LEFT'), ('ALIGN', (1,0), (1,-1), 'RIGHT'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('BACKGROUND', (0,4), (-1,4), colors.HexColor("#EAECEE")), ('BACKGROUND', (0,6), (-1,6), colors.HexColor("#D4EFDF")), ('FONTNAME', (0,4), (-1,4), 'Helvetica-Bold'), ('FONTNAME', (0,6), (-1,6), 'Helvetica-Bold')])); elements.append(t_resumen); doc.build(elements); buffer.seek(0); return buffer
 
 def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gastos_det_df, v_abonos_jeny, v_otras_rutas):
-    buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []; styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50")); subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray); h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
+    buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []; styles = getSampleStyleSheet(); title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50")); subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray); h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
     elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style)); elements.append(Paragraph(f"REPORTE GERENCIAL DE RESULTADOS: {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", subtitle_style)); elements.append(Spacer(1, 20))
     v_efectivo = ingresos_df['efectivo'].sum() if not ingresos_df.empty else 0; v_pedidos_trans = (ingresos_df['pedidos'].sum() + ingresos_df['transferencias'].sum()) if not ingresos_df.empty else 0; t_ingresos = v_efectivo + v_pedidos_trans + v_abonos_jeny + v_otras_rutas; t_gastos = gastos_cat_df['total'].sum() if not gastos_cat_df.empty else 0; utilidad = t_ingresos - t_gastos
-    resumen_data = [["RESUMEN DE INGRESOS", "MONTO (Q)", "RESUMEN DE EGRESOS Y UTILIDAD", "MONTO (Q)"], ["Ventas Mostrador (Efectivo)", f"Q {v_efectivo:,.2f}", "Total Gastos Generales", f"Q {t_gastos:,.2f}"], ["Transferencias / Pedidos", f"Q {v_pedidos_trans:,.2f}", "", ""], ["Abonos Ruta Oasis (Jeny)", f"Q {v_abonos_jeny:,.2f}", "UTILIDAD BRUTA DEL PERIODO", f"Q {utilidad:,.2f}"], ["Rutas Contado (Shell/XML)", f"Q {v_otras_rutas:,.2f}", "", ""], ["TOTAL INGRESOS", f"Q {t_ingresos:,.2f}", "", ""]]
+    resumen_data = [
+        ["RESUMEN DE INGRESOS", "MONTO (Q)", "RESUMEN DE EGRESOS Y UTILIDAD", "MONTO (Q)"],
+        ["Ventas Mostrador (Efectivo)", f"Q {v_efectivo:,.2f}", "Total Gastos Generales", f"Q {t_gastos:,.2f}"],
+        ["Transferencias / Pedidos", f"Q {v_pedidos_trans:,.2f}", "", ""],
+        ["Abonos Ruta Oasis (Jeny)", f"Q {v_abonos_jeny:,.2f}", "UTILIDAD BRUTA DEL PERIODO", f"Q {utilidad:,.2f}"],
+        ["Rutas Contado (Shell/XML)", f"Q {v_otras_rutas:,.2f}", "", ""],
+        ["TOTAL INGRESOS", f"Q {t_ingresos:,.2f}", "", ""]
+    ]
     t_resumen = Table(resumen_data, colWidths=[140, 90, 190, 100]); t_resumen.setStyle(TableStyle([('BACKGROUND', (0,0), (1,0), colors.HexColor("#27AE60")), ('BACKGROUND', (2,0), (3,0), colors.HexColor("#E74C3C")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('ALIGN', (1,0), (1,-1), 'RIGHT'), ('ALIGN', (3,0), (3,-1), 'RIGHT'), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('BACKGROUND', (0,-1), (1,-1), colors.HexColor("#D4EFDF")), ('FONTNAME', (0,-1), (1,-1), 'Helvetica-Bold'), ('BACKGROUND', (2,3), (3,3), colors.HexColor("#FADBD8")), ('FONTNAME', (2,3), (3,3), 'Helvetica-Bold')])); elements.append(t_resumen); elements.append(Spacer(1, 20))
     if not gastos_cat_df.empty and t_gastos > 0:
         elements.append(Paragraph("<b>Distribución de Gastos por Categoría</b>", h2_style)); d = Drawing(400, 160); pc = Pie(); pc.x = 20; pc.y = 10; pc.width = 140; pc.height = 140; pc.data = gastos_cat_df['total'].tolist(); pc.labels = [f"{row['categoria']} ({(row['total']/t_gastos)*100:.1f}%)" for _, row in gastos_cat_df.iterrows()]; pc.sideLabels = 1; colores_hex = ["#3498DB", "#E74C3C", "#2ECC71", "#F1C40F", "#9B59B6", "#E67E22", "#1ABC9C", "#34495E", "#95A5A6"]
@@ -178,15 +184,14 @@ def generar_pdf_comparativa_diaria(f_inicio, f_fin, df_resumen, t_ing, t_gas, t_
     buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []; styles = getSampleStyleSheet(); title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50")); subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray); h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
     elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style)); elements.append(Paragraph(f"REPORTE COMPARATIVO DIARIO (INCLUYE RUTAS Y ABONOS): {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", subtitle_style)); elements.append(Spacer(1, 15))
     resumen_data = [["TOTAL INGRESOS GLOBAL", "TOTAL GASTOS", "UTILIDAD NETA"], [f"Q {t_ing:,.2f}", f"Q {t_gas:,.2f}", f"Q {t_uti:,.2f}"]]; t_resumen = Table(resumen_data, colWidths=[150, 150, 150]); t_resumen.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('BOTTOMPADDING', (0,0), (-1,0), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold')])); elements.append(t_resumen); elements.append(Spacer(1, 20))
-    elements.append(Paragraph("<b>Gráfica Comparativa: Ingresos vs Gastos</b>", h2_style)); d = Drawing(480, 200); bc = VerticalBarChart(); bc.x = 40; bc.y = 40; bc.height = 140; bc.width = 420; bc.data = [df_resumen['ingresos'].tolist(), df_resumen['gastos'].tolist()]; bc.strokeColor = colors.white; bc.valueAxis.valueMin = 0; bc.categoryAxis.categoryNames = [fecha.strftime('%d/%m') for fecha in df_resumen['fecha']]; bc.categoryAxis.labels.angle = 45; bc.categoryAxis.labels.dy = -10; bc.categoryAxis.labels.fontSize = 8; bc.bars[0].fillColor = colors.HexColor("#27AE60"); bc.bars[1].fillColor = colors.HexColor("#E74C3C") 
+    elements.append(Paragraph("<b>Gráfica Comparativa: Ingresos vs Gastos</b>", h2_style)); d = Drawing(480, 200); bc = VerticalBarChart(); bc.x = 40; bc.y = 40; bc.height = 140; bc.width = 420; bc.data = [df_resumen['ingresos'].tolist(), df_resumen['gastos'].tolist()]; bc.strokeColor = colors.white; bc.valueAxis.valueMin = 0; bc.categoryAxis.categoryNames = [fecha.strftime('%d/%m') for fecha in df_resumen['fecha']]; bc.categoryAxis.labels.angle = 45; bc.categoryAxis.labels.dy = -10; bc.categoryAxis.labels.fontSize = 8; bc.bars[0].fillColor = colors.HexColor("#27AE60") ; bc.bars[1].fillColor = colors.HexColor("#E74C3C") 
     leg = Legend(); leg.x = 350; leg.y = 180; leg.alignment = 'right'; leg.colorNamePairs = [(colors.HexColor("#27AE60"), 'Total Ingresos'), (colors.HexColor("#E74C3C"), 'Total Gastos')]; leg.fontSize = 8; leg.boxAnchor = 'nw'; d.add(bc); d.add(leg); elements.append(d); elements.append(Spacer(1, 20))
     elements.append(Paragraph("<b>Detalle Diario de Movimientos</b>", h2_style)); det_data = [["FECHA", "TOTAL INGRESOS", "TOTAL GASTOS", "UTILIDAD NETA"]]
     for index, row in df_resumen.iterrows(): det_data.append([row['fecha'].strftime('%d/%m/%Y'), f"Q {row['ingresos']:,.2f}", f"Q {row['gastos']:,.2f}", f"Q {row['utilidad']:,.2f}"])
     t_det = Table(det_data, colWidths=[120, 120, 120, 120]); t_det.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#34495E")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('ALIGN', (0,0), (0,-1), 'CENTER'), ('ALIGN', (1,0), (-1,-1), 'RIGHT'), ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)])); elements.append(t_det); doc.build(elements); buffer.seek(0); return buffer
 
 def generar_pdf_dias_estrella(f_inicio, f_fin, df_agrupado, mejor_dia, peor_dia, prom_gral, dia_record):
-    buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []; styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50")); subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray); h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
+    buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []; styles = getSampleStyleSheet(); title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50")); subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray); h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
     elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style)); elements.append(Paragraph(f"REPORTE DE DÍAS ESTRELLA: {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", subtitle_style)); elements.append(Spacer(1, 15))
     metricas_data = [["MEJOR DÍA", "DÍA MÁS FLOJO", "PROMEDIO DIARIO", "DÍA RÉCORD"], [str(mejor_dia), str(peor_dia), f"Q {prom_gral:,.2f}", f"{dia_record['fecha'].strftime('%d/%m/%Y')} (Q {dia_record['ingresos']:,.2f})"]]; t_metricas = Table(metricas_data, colWidths=[120, 120, 130, 150]); t_metricas.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('BOTTOMPADDING', (0,0), (-1,0), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold')])); elements.append(t_metricas); elements.append(Spacer(1, 20))
     elements.append(Paragraph("<b>Gráfica de Rendimiento por Día de la Semana</b>", h2_style)); d = Drawing(480, 200); bc = VerticalBarChart(); bc.x = 40; bc.y = 40; bc.height = 140; bc.width = 420; bc.data = [df_agrupado['promedio_ventas'].tolist()]; bc.strokeColor = colors.white; bc.valueAxis.valueMin = 0; bc.categoryAxis.categoryNames = df_agrupado['nombre_dia'].tolist(); bc.categoryAxis.labels.dy = -10; bc.categoryAxis.labels.fontSize = 9; bc.bars[0].fillColor = colors.HexColor("#27AE60"); d.add(bc); elements.append(d); elements.append(Spacer(1, 20))
@@ -249,12 +254,11 @@ with st.sidebar:
 # ==========================================
 
 # ------------------------------------------
-# MÓDULO: 🚚 RUTA Y PEDIDOS (XML) CON SELECCIÓN DE SUCURSAL
+# MÓDULO: 🚚 RUTA Y PEDIDOS (XML) CON CORRECCIÓN DE NATIVE FLOAT
 # ------------------------------------------
 if opcion_menu == "🚚 Ruta y Pedidos (XML)":
     st.title("🚚 Control de Ruta y Pedidos (Lector SAT)")
     
-    # 5 PESTAÑAS: Lector, Cuenta, Historial, Estadísticas, y CONFIGURAR SUCURSALES (NUEVA)
     tab_xml, tab_cuenta, tab_historial_rutas, tab_estadisticas_rutas, tab_config_sucursales = st.tabs([
         "📥 1. Lector de Facturas", 
         "📓 2. Cuenta de Jeny", 
@@ -263,15 +267,12 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
         "⚙️ 5. Configurar Sucursales"
     ])
     
-    # Función para obtener la lista dinámica de sucursales desde Neon
     def obtener_lista_sucursales():
         try:
             df_suc = conn.query("SELECT nombre FROM sucursales_oasis ORDER BY nombre", ttl=0)
             if not df_suc.empty:
                 return df_suc['nombre'].tolist() + ["Otra Sucursal Oasis"]
-        except Exception:
-            pass
-        # Si la tabla no existe o está vacía, devuelve el valor por defecto
+        except Exception: pass
         return ["Oasis Jocotan", "Oasis Zacapa", "Oasis Teculutan", "Quali Usumatlan", "Quali San Jorge Zacapa", "Oasis Chiquimula Octava", "Oasis Chiquimula Decima", "Quali El Molino Chiquimula", "Otra Sucursal Oasis"]
 
     # --- PESTAÑA 1: SUBIR XML ---
@@ -281,29 +282,32 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
         
         if archivo_xml is not None:
             try:
-                xml_str = archivo_xml.getvalue().decode('utf-8', errors='ignore')
-                xml_str = re.sub(r'\sxmlns(:\w+)?="[^"]+"', '', xml_str) 
-                xml_str = re.sub(r'<\w+:', '<', xml_str) 
-                xml_str = re.sub(r'</\w+:', '</', xml_str) 
-                
+                xml_str = archivo_xml.getvalue()
                 root = ET.fromstring(xml_str)
-                fecha_emision_elem = root.find('.//FechaHoraEmision')
-                fecha_factura = fecha_emision_elem.text[:10] if fecha_emision_elem is not None else str(get_fecha_guate())
                 
-                receptor_elem = root.find('.//Receptor')
-                cliente_nombre_sat = receptor_elem.attrib.get('NombreReceptor', 'Cliente Generico') if receptor_elem is not None else "Cliente Generico"
-                nit_cliente = receptor_elem.attrib.get('IDReceptor', 'CF') if receptor_elem is not None else "CF"
+                fecha_factura = str(get_fecha_guate())
+                cliente_nombre_sat = "Cliente Generico"
+                nit_cliente = "CF"
                 
+                for elem in root.iter():
+                    tag_name = elem.tag.split('}')[-1]
+                    if tag_name == 'DatosGenerales':
+                        f_emision = elem.attrib.get('FechaHoraEmision', '')
+                        if f_emision: fecha_factura = f_emision[:10]
+                    elif tag_name == 'Receptor':
+                        cliente_nombre_sat = elem.attrib.get('NombreReceptor', 'Cliente Generico')
+                        nit_cliente = elem.attrib.get('IDReceptor', 'CF')
+                        
                 st.markdown("---")
                 st.markdown(f"### 🏢 Facturado a: **{cliente_nombre_sat}** (NIT: {nit_cliente})")
                 st.markdown(f"📅 **Fecha de Emisión:** {pd.to_datetime(fecha_factura).strftime('%d/%m/%Y')}")
                 
                 st.markdown("#### 📍 Identificación de Sucursal / Destino")
-                es_oasis = (nit_cliente.replace("-", "") == "98133136" or "TIENDAS DE ORIENTE" in cliente_nombre_sat.upper() or "OASIS" in cliente_nombre_sat.upper())
+                es_oasis = (nit_cliente.replace("-", "") == "98133136" or "TIENDAS DE ORIENTE" in cliente_nombre_sat.upper() or "OASIS" in cliente_nombre_sat.upper() or "QUALY" in cliente_nombre_sat.upper())
                 
                 col_suc1, col_suc2 = st.columns(2)
                 if es_oasis:
-                    opciones_sucursal = obtener_lista_sucursales() # <-- LLAMA A LA LISTA DINÁMICA
+                    opciones_sucursal = obtener_lista_sucursales()
                     sucursal_seleccionada = col_suc1.selectbox("Selecciona la Sucursal de Oasis:", opciones_sucursal)
                     if sucursal_seleccionada == "Otra Sucursal Oasis":
                         sucursal_final = col_suc2.text_input("Escribe el nombre de la sucursal:", value="Oasis Sucursal")
@@ -318,28 +322,30 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                         sucursal_final = sucursal_seleccionada
                 
                 lista_items = []
-                for item in root.findall('.//Item'):
-                    cantidad_elem = item.find('Cantidad')
-                    desc_elem = item.find('Descripcion')
-                    total_elem = item.find('Total')
-                    cant = float(cantidad_elem.text) if cantidad_elem is not None else 0.0
-                    desc = desc_elem.text if desc_elem is not None else "Sin descripción"
-                    tot = float(total_elem.text) if total_elem is not None else 0.0
-                    
-                    desc_low = desc.lower()
-                    if 'pasta' in desc_low or 'pollo' in desc_low or 'taco' in desc_low: categoria = "Pasta / Salado"
-                    else: categoria = "Pan / Repostería"
+                for elem in root.iter():
+                    if elem.tag.split('}')[-1] == 'Item':
+                        cant = 0.0; desc = "Sin descripción"; tot = 0.0
+                        for child in list(elem):
+                            ctag = child.tag.split('}')[-1]
+                            if ctag == 'Cantidad': cant = float(child.text) if child.text else 0.0
+                            elif ctag == 'Descripcion': desc = child.text if child.text else "Sin descripción"
+                            elif ctag == 'Total': tot = float(child.text) if child.text else 0.0
+                            
+                        desc_low = desc.lower()
+                        if 'pasta' in desc_low or 'pollo' in desc_low or 'taco' in desc_low: categoria = "Pasta / Salado"
+                        else: categoria = "Pan / Repostería"
+                        lista_items.append({"Cantidad": cant, "Descripción": desc, "Categoría": categoria, "Total (Q)": tot})
                         
-                    lista_items.append({"Cantidad": cant, "Descripción": desc, "Categoría": categoria, "Total (Q)": tot})
-                    
                 df_xml = pd.DataFrame(lista_items)
                 
                 if not df_xml.empty:
                     df_pan = df_xml[df_xml['Categoría'] == 'Pan / Repostería']
                     df_pasta = df_xml[df_xml['Categoría'] == 'Pasta / Salado']
-                    tot_pan = df_pan['Total (Q)'].sum()
-                    tot_pasta = df_pasta['Total (Q)'].sum()
-                    gran_total = df_xml['Total (Q)'].sum()
+                    
+                    # LA CORRECCIÓN DEL ERROR ROJO: Forzamos que sean float nativos de Python, no np.float64
+                    tot_pan = float(df_pan['Total (Q)'].sum()) if not df_pan.empty else 0.0
+                    tot_pasta = float(df_pasta['Total (Q)'].sum()) if not df_pasta.empty else 0.0
+                    gran_total = float(df_xml['Total (Q)'].sum()) if not df_xml.empty else 0.0
                     
                     col1, col2 = st.columns(2)
                     with col1:
@@ -373,10 +379,9 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                                 s.commit()
                             st.success(f"✅ ¡Ruta guardada para {sucursal_final} exitosamente!"); st.balloons()
                         except Exception as e: st.error(f"⚠️ Error al guardar. Detalle: {e}")
-                else: st.warning("El XML parece estar vacío o no tiene el formato estándar de la SAT.")
-            except Exception as e: st.error(f"❌ Ocurrió un error al leer el XML. Detalles técnicos: {e}")
+                else: st.warning("No pude extraer productos de este XML. Verifica que sea una factura estándar de la SAT.")
+            except Exception as e: st.error(f"❌ Ocurrió un error al leer el XML nativo. Detalles: {e}")
 
-    # --- PESTAÑA 2: CUENTA CORRIENTE JENY ---
     with tab_cuenta:
         st.markdown("### 📓 Estado de Cuenta: Jeny (Oasis / Qualy / Tiendas de Oriente)")
         try:
@@ -411,7 +416,6 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
             else: st.info("Aún no hay movimientos registrados en la cuenta de Jeny.")
         except Exception as e: st.error(f"⚠️ Error: {e}")
 
-    # --- PESTAÑA 3: HISTORIAL GENERAL Y ELIMINACIÓN ---
     with tab_historial_rutas:
         st.markdown("### 🗄️ Historial de Facturas Subidas")
         try:
@@ -427,6 +431,7 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                 st.markdown("#### 🗑️ Eliminar Factura Subida por Error")
                 opciones_borrar = df_rutas_hist.apply(lambda row: f"ID: {row['id']} | Fecha: {pd.to_datetime(row['fecha_factura']).strftime('%d/%m/%Y')} | Sucursal: {row.get('sucursal', row['cliente'])} | Total: Q {row['gran_total']}", axis=1).tolist()
                 ruta_a_borrar = st.selectbox("Selecciona la factura a eliminar:", opciones_borrar)
+                
                 if st.button("🗑️ Eliminar Factura Seleccionada", type="secondary"):
                     idx_seleccion = opciones_borrar.index(ruta_a_borrar); datos_ruta = df_rutas_hist.iloc[idx_seleccion]
                     ruta_id = int(datos_ruta['id']); fecha_ruta = datos_ruta['fecha_factura']; monto_pan = float(datos_ruta['total_pan']); cli_nombre = datos_ruta['cliente']
@@ -439,7 +444,6 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
             else: st.info("No hay rutas guardadas todavía.")
         except Exception as e: st.caption(f"Error al cargar historial: {e}")
 
-    # --- PESTAÑA 4: ESTADÍSTICAS POR SUCURSAL ---
     with tab_estadisticas_rutas:
         st.markdown("### 📊 Comparativa de Compras por Sucursal")
         try:
@@ -449,22 +453,24 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                 else: df_analisis['sucursal'] = df_analisis['sucursal'].fillna(df_analisis['cliente'])
                 resumen_sucursal = df_analisis.groupby('sucursal', as_index=False).agg({'total_pan': 'sum', 'total_pasta': 'sum', 'gran_total': 'sum'}).sort_values('gran_total', ascending=False)
                 sucursal_top = resumen_sucursal.iloc[0]['sucursal']
-                total_top = resumen_sucursal.iloc[0]['gran_total']
+                total_top = float(resumen_sucursal.iloc[0]['gran_total'])
+                
                 col_m1, col_m2 = st.columns(2)
                 col_m1.metric("👑 Sucursal Estrella (Mayor Compra)", f"{sucursal_top}", f"Q {total_top:,.2f}")
-                col_m2.metric("📦 Total Facturado en Todas las Rutas", f"Q {resumen_sucursal['gran_total'].sum():,.2f}")
+                col_m2.metric("📦 Total Facturado en Todas las Rutas", f"Q {float(resumen_sucursal['gran_total'].sum()):,.2f}")
+                
                 st.markdown("---")
                 st.subheader("📈 Gráfica: Pan vs Pasta de Pollo por Sucursal")
                 df_graf_suc = resumen_sucursal.melt(id_vars='sucursal', value_vars=['total_pan', 'total_pasta'], var_name='Producto', value_name='Total_Q')
                 df_graf_suc['Producto'] = df_graf_suc['Producto'].map({'total_pan': 'Panadería', 'total_pasta': 'Pasta de Pollo'})
                 fig_suc = px.bar(df_graf_suc, x='sucursal', y='Total_Q', color='Producto', barmode='group', labels={'sucursal': 'Sucursal / Cliente', 'Total_Q': 'Total Comprado (Q)'}, color_discrete_map={'Panadería': '#F39C12', 'Pasta de Pollo': '#E74C3C'})
                 st.plotly_chart(fig_suc, use_container_width=True)
+                
                 st.subheader("📋 Tabla Consolidada por Sucursal")
                 st.dataframe(resumen_sucursal, column_config={"sucursal": "Sucursal", "total_pan": st.column_config.NumberColumn("Total Pan (Q)", format="Q %.2f"), "total_pasta": st.column_config.NumberColumn("Total Pasta (Q)", format="Q %.2f"), "gran_total": st.column_config.NumberColumn("Gran Total Vendido", format="Q %.2f")}, hide_index=True, use_container_width=True)
             else: st.info("Sube facturas en la pestaña 1 para ver las estadísticas de tus sucursales.")
         except Exception as e: st.error(f"Error al calcular estadísticas: {e}")
 
-    # --- PESTAÑA 5: CONFIGURAR SUCURSALES (NUEVO) ---
     with tab_config_sucursales:
         st.markdown("### ⚙️ Administrar Sucursales de Oasis / Qualy")
         st.write("Agrega, edita o elimina los nombres de las sucursales que aparecen en la lista desplegable al momento de subir una factura de la ruta.")
@@ -480,45 +486,30 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                                 s.commit()
                             st.success(f"✅ Sucursal '{nueva_sucursal}' agregada exitosamente.")
                             st.rerun()
-                        else:
-                            st.warning("Debes escribir un nombre válido.")
+                        else: st.warning("Debes escribir un nombre válido.")
             
             df_sucursales_edit = conn.query("SELECT id, nombre FROM sucursales_oasis ORDER BY id", ttl=0)
             if not df_sucursales_edit.empty:
                 st.markdown("#### ✏️ Editar Sucursales Existentes")
-                sucursales_editadas = st.data_editor(
-                    df_sucursales_edit, 
-                    column_config={
-                        "id": st.column_config.NumberColumn("ID", disabled=True),
-                        "nombre": st.column_config.TextColumn("Nombre de la Sucursal", required=True)
-                    }, 
-                    hide_index=True, use_container_width=True
-                )
+                sucursales_editadas = st.data_editor(df_sucursales_edit, column_config={"id": st.column_config.NumberColumn("ID", disabled=True), "nombre": st.column_config.TextColumn("Nombre de la Sucursal", required=True)}, hide_index=True, use_container_width=True)
                 if st.button("💾 Guardar Cambios de Nombres", type="primary"):
                     with conn.session as s:
-                        for index, row in sucursales_editadas.iterrows():
-                            s.execute(text("UPDATE sucursales_oasis SET nombre = :n WHERE id = :id"), {"n": row["nombre"], "id": int(row["id"])})
+                        for index, row in sucursales_editadas.iterrows(): s.execute(text("UPDATE sucursales_oasis SET nombre = :n WHERE id = :id"), {"n": row["nombre"], "id": int(row["id"])})
                         s.commit()
-                    st.success("✅ Nombres actualizados correctamente.")
-                    st.rerun()
+                    st.success("✅ Nombres actualizados correctamente."); st.rerun()
                     
                 st.markdown("---")
                 st.markdown("#### 🗑️ Eliminar Sucursal")
                 suc_a_borrar = st.selectbox("Selecciona la sucursal que deseas quitar de la lista:", df_sucursales_edit['nombre'])
                 if st.button("Eliminar Sucursal Seleccionada"):
                     id_borrar = df_sucursales_edit.loc[df_sucursales_edit['nombre'] == suc_a_borrar, 'id'].values[0]
-                    with conn.session as s:
-                        s.execute(text("DELETE FROM sucursales_oasis WHERE id = :id"), {"id": int(id_borrar)})
-                        s.commit()
-                    st.success("🗑️ Sucursal eliminada de la lista desplegable.")
-                    st.rerun()
-            else:
-                st.info("No hay sucursales configuradas. Usa el panel de arriba para agregar una.")
-        except Exception as e:
-            st.error(f"⚠️ Debes crear la tabla 'sucursales_oasis' en tu base de datos Neon. Revisa el Paso 1. Detalle: {e}")
+                    with conn.session as s: s.execute(text("DELETE FROM sucursales_oasis WHERE id = :id"), {"id": int(id_borrar)}); s.commit()
+                    st.success("🗑️ Sucursal eliminada de la lista desplegable."); st.rerun()
+            else: st.info("No hay sucursales configuradas. Usa el panel de arriba para agregar una.")
+        except Exception as e: st.error(f"⚠️ Debes crear la tabla 'sucursales_oasis' en tu base de datos Neon.")
 
 # ------------------------------------------
-# MÓDULOS DE REGISTRO, HISTORIAL, ESTADÍSTICAS, COMPARATIVA, DÍAS ESTRELLA, PROVEEDORES, PLANILLA Y REPORTE MENSUAL
+# MÓDULO 1: REGISTRO DE CORTE
 # ------------------------------------------
 elif opcion_menu == "📝 Registro de Corte":
     st.title("🍞 Ingreso Diario de Corte")
@@ -546,8 +537,7 @@ elif opcion_menu == "📝 Registro de Corte":
         for i, row in df_temp.iterrows():
             detalle = str(row["Detalle"]).strip() if pd.notna(row["Detalle"]) else ""
             categoria = row["Categoría"]
-            if detalle != "" and (pd.isna(categoria) or categoria is None or str(categoria).strip() == ""):
-                df_temp.at[i, "Categoría"] = autocompletar_categoria(detalle); hubo_cambios = True
+            if detalle != "" and (pd.isna(categoria) or categoria is None or str(categoria).strip() == ""): df_temp.at[i, "Categoría"] = autocompletar_categoria(detalle); hubo_cambios = True
         if hubo_cambios: st.session_state.gastos_df = df_temp; st.rerun()
     st.markdown("---")
     st.markdown("### 💰 Resumen de Ingresos")
@@ -560,7 +550,6 @@ elif opcion_menu == "📝 Registro de Corte":
     st.markdown("### 📊 Cuadre Final")
     col_tot1, col_tot2, col_tot_bruto, col_tot3, col_tot4 = st.columns(5)
     col_tot1.metric("💵 Ingresos (Efectivo)", f"Q {total_ingresos_efectivo:.2f}"); col_tot2.metric("📱 Fri / Depósitos", f"Q {transferencias:.2f}"); col_tot_bruto.metric("💰 Total Ingresos", f"Q {total_ingresos_bruto:.2f}"); col_tot3.metric("📉 Gastos (Efectivo)", f"Q {total_gastos_calc:.2f}"); col_tot4.metric("⚖️ Efectivo a Entregar", f"Q {efectivo_a_entregar:.2f}")
-    st.markdown("<br>", unsafe_allow_html=True)
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1: btn_guardar = st.button("💾 Guardar Corte Completo", type="primary", use_container_width=True)
     with col_btn2: btn_limpiar = st.button("🧹 Limpiar / Nuevo Corte", type="secondary", use_container_width=True)
@@ -594,6 +583,9 @@ elif opcion_menu == "📝 Registro de Corte":
     if 'pdf_generado' in st.session_state:
         st.markdown("---"); st.download_button(label="📥 Descargar PDF del Corte para Imprimir", data=st.session_state['pdf_generado'], file_name=st.session_state['pdf_nombre'], mime="application/pdf", type="secondary", use_container_width=True)
 
+# ------------------------------------------
+# MÓDULO 2: HISTORIAL DE CORTES
+# ------------------------------------------
 elif opcion_menu == "📅 Historial de Cortes":
     st.title("📅 Consulta de Historial e Impresión")
     fecha_consulta = st.date_input("Consultar fecha:", get_fecha_guate(), format="DD/MM/YYYY")
@@ -611,9 +603,7 @@ elif opcion_menu == "📅 Historial de Cortes":
             with st.expander("✏️ Corregir Ingresos de este Día"):
                 with st.form("form_corregir_ingresos"):
                     col_e1, col_e2, col_e3 = st.columns(3)
-                    nuevo_efectivo = col_e1.number_input("🍞 Venta (Efectivo)", value=float(sum_venta), min_value=0.0, step=50.0)
-                    nuevo_pedidos = col_e2.number_input("🎂 Pedidos (Efectivo)", value=float(sum_pedidos), min_value=0.0, step=50.0)
-                    nuevo_trans = col_e3.number_input("📱 Transferencias (Fri/Depósitos)", value=float(sum_transferencias), min_value=0.0, step=50.0)
+                    nuevo_efectivo = col_e1.number_input("🍞 Venta (Efectivo)", value=float(sum_venta), min_value=0.0, step=50.0); nuevo_pedidos = col_e2.number_input("🎂 Pedidos (Efectivo)", value=float(sum_pedidos), min_value=0.0, step=50.0); nuevo_trans = col_e3.number_input("📱 Transferencias (Fri/Depósitos)", value=float(sum_transferencias), min_value=0.0, step=50.0)
                     if st.form_submit_button("💾 Guardar Corrección"):
                         with conn.session as s:
                             existe = s.execute(text("SELECT id FROM ingresos WHERE corte_id = :cid"), {"cid": int(corte_id)}).fetchone()
@@ -629,14 +619,16 @@ elif opcion_menu == "📅 Historial de Cortes":
         else: st.warning(f"No hay ningún corte guardado en el sistema para la fecha {fecha_consulta.strftime('%d/%m/%Y')}.")
     except Exception as e: st.error("Error al consultar el historial.")
 
+# ------------------------------------------
+# MÓDULO 3: ESTADÍSTICAS
+# ------------------------------------------
 elif opcion_menu == "📈 Estadísticas":
     st.title("📈 Estadísticas y Finanzas")
     meses_dict = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
     hoy = get_fecha_guate(); nombre_mes_actual = list(meses_dict.keys())[list(meses_dict.values()).index(hoy.month)]
     col_f1, col_f2 = st.columns(2)
     mes_seleccionado = col_f1.selectbox("Selecciona el Mes", list(meses_dict.keys()), index=list(meses_dict.keys()).index(nombre_mes_actual))
-    anio_seleccionado = col_f2.selectbox("Selecciona el Año", [hoy.year - 1, hoy.year, hoy.year + 1], index=1)
-    mes_num = meses_dict[mes_seleccionado]
+    anio_seleccionado = col_f2.selectbox("Selecciona el Año", [hoy.year - 1, hoy.year, hoy.year + 1], index=1); mes_num = meses_dict[mes_seleccionado]
     try:
         query_gastos = """SELECT c.nombre as categoria, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id JOIN cortes_diarios cd ON g.corte_id = cd.id WHERE EXTRACT(MONTH FROM cd.fecha) = :mes AND EXTRACT(YEAR FROM cd.fecha) = :anio GROUP BY c.nombre"""
         gastos_totales = conn.query(query_gastos, params={"mes": mes_num, "anio": anio_seleccionado}, ttl=0)
@@ -651,22 +643,22 @@ elif opcion_menu == "📈 Estadísticas":
         ing_caja = float(ingresos_totales.iloc[0]['total_ingresos']) if not ingresos_totales.empty and pd.notna(ingresos_totales.iloc[0]['total_ingresos']) else 0.0
         ing_jeny = float(jeny_totales.iloc[0]['abonos']) if not jeny_totales.empty and pd.notna(jeny_totales.iloc[0]['abonos']) else 0.0
         ing_rutas = float(rutas_totales.iloc[0]['rutas_contado']) if not rutas_totales.empty and pd.notna(rutas_totales.iloc[0]['rutas_contado']) else 0.0
-        
         total_i = ing_caja + ing_jeny + ing_rutas; utilidad = total_i - total_g
         
         st.markdown("---"); col_s1, col_s2, col_s3 = st.columns(3)
         col_s1.metric(f"💵 Ingresos Globales ({mes_seleccionado})", f"Q {total_i:,.2f}"); col_s2.metric(f"📉 Gastos Globales ({mes_seleccionado})", f"Q {total_g:,.2f}"); col_s3.metric(f"⚖️ Utilidad Bruta", f"Q {utilidad:,.2f}")
-        st.caption(f"**Desglose Ingresos:** Caja Diaria (Q {ing_caja:,.2f}) + Abonos Jeny (Q {ing_jeny:,.2f}) + Rutas Contado (Q {ing_rutas:,.2f})")
-        st.markdown("---")
+        st.caption(f"**Desglose Ingresos:** Caja Diaria (Q {ing_caja:,.2f}) + Abonos Jeny (Q {ing_jeny:,.2f}) + Rutas Contado (Q {ing_rutas:,.2f})"); st.markdown("---")
         if not gastos_totales.empty and total_g > 0: fig = px.pie(gastos_totales, values='total', names='categoria', hole=0.4, title=f"Distribución de Gastos - {mes_seleccionado} {anio_seleccionado}"); st.plotly_chart(fig, use_container_width=True)
         else: st.info(f"📊 No hay gastos registrados para el mes de {mes_seleccionado} {anio_seleccionado}.")
     except Exception as e: st.error(f"Error al cargar las estadísticas: {e}")
 
+# ------------------------------------------
+# MÓDULO 4: COMPARATIVA DIARIA
+# ------------------------------------------
 elif opcion_menu == "📆 Comparativa Diaria":
     st.title("📆 Comparativa de Ingresos vs Gastos por Día")
     hoy = get_fecha_guate(); primer_dia_mes = hoy.replace(day=1)
-    col_d1, col_d2 = st.columns(2)
-    fecha_inicio_comp = col_d1.date_input("Desde:", primer_dia_mes, format="DD/MM/YYYY"); fecha_fin_comp = col_d2.date_input("Hasta:", hoy, format="DD/MM/YYYY")
+    col_d1, col_d2 = st.columns(2); fecha_inicio_comp = col_d1.date_input("Desde:", primer_dia_mes, format="DD/MM/YYYY"); fecha_fin_comp = col_d2.date_input("Hasta:", hoy, format="DD/MM/YYYY")
     if st.button("🔍 Consultar Días", type="primary"):
         with st.spinner("Cargando los datos día por día..."):
             try:
@@ -694,11 +686,13 @@ elif opcion_menu == "📆 Comparativa Diaria":
                     st.download_button(label="📥 Descargar Comparativa en PDF", data=pdf_comparativa, file_name=f"Comparativa_Diaria_{fecha_inicio_comp.strftime('%d-%m-%Y')}_al_{fecha_fin_comp.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
             except Exception as e: st.error(f"Error al cargar la comparativa: {e}")
 
+# ------------------------------------------
+# MÓDULO 5: DÍAS ESTRELLA
+# ------------------------------------------
 elif opcion_menu == "🏆 Días Estrella":
     st.title("🏆 Días Estrella (Rendimiento Semanal)")
     hoy = get_fecha_guate(); primer_dia_mes = hoy.replace(day=1)
-    col_d1, col_d2 = st.columns(2)
-    fecha_inicio_est = col_d1.date_input("Desde:", primer_dia_mes, format="DD/MM/YYYY", key="fecha_est_1"); fecha_fin_est = col_d2.date_input("Hasta:", hoy, format="DD/MM/YYYY", key="fecha_est_2")
+    col_d1, col_d2 = st.columns(2); fecha_inicio_est = col_d1.date_input("Desde:", primer_dia_mes, format="DD/MM/YYYY", key="fecha_est_1"); fecha_fin_est = col_d2.date_input("Hasta:", hoy, format="DD/MM/YYYY", key="fecha_est_2")
 
     if st.button("📊 Analizar Días", type="primary"):
         with st.spinner("Buscando el mejor día..."):
@@ -713,7 +707,7 @@ elif opcion_menu == "🏆 Días Estrella":
                     ) sub GROUP BY fecha
                 """
                 df_ing_dias = conn.query(q_ing_full, params={"inicio": fecha_inicio_est, "fin": fecha_fin_est}, ttl=0)
-                if df_ing_dias.empty or df_ing_dias['ingresos'].sum() == 0: st.warning("No hay ventas registradas en ese rango para hacer el análisis.")
+                if df_ing_dias.empty or df_ing_dias['ingresos'].sum() == 0: st.warning("No hay ventas registradas en ese rango.")
                 else:
                     dias_espanol = {'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles', 'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'}
                     df_ing_dias['fecha'] = pd.to_datetime(df_ing_dias['fecha']); df_ing_dias['nombre_dia'] = df_ing_dias['fecha'].dt.day_name().map(dias_espanol)
@@ -727,6 +721,9 @@ elif opcion_menu == "🏆 Días Estrella":
                     pdf_estrellas = generar_pdf_dias_estrella(fecha_inicio_est, fecha_fin_est, df_agrupado, mejor_dia_nombre, peor_dia_nombre, promedio_general, dia_record); st.download_button(label="📥 Descargar Análisis en PDF", data=pdf_estrellas, file_name=f"Dias_Estrella_{fecha_inicio_est.strftime('%d-%m-%Y')}_al_{fecha_fin_est.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
             except Exception as e: st.error(f"Error al cargar el análisis: {e}")
 
+# ------------------------------------------
+# MÓDULO 7: PROVEEDORES
+# ------------------------------------------
 elif opcion_menu == "💳 Proveedores":
     st.title("💳 Control de Créditos y Proveedores")
     try:
@@ -774,6 +771,9 @@ elif opcion_menu == "💳 Proveedores":
                 st.dataframe(deudas_activas, column_config={"vencimiento": st.column_config.DateColumn("Vencimiento", format="DD/MM/YYYY"), "saldo": st.column_config.NumberColumn("Saldo Pendiente", format="Q %.2f")}, use_container_width=True, hide_index=True)
     except Exception as e: st.error(f"Error: {e}")
 
+# ------------------------------------------
+# MÓDULO 8: PLANILLA PANADEROS
+# ------------------------------------------
 elif opcion_menu == "👨‍🍳 Planilla Panaderos":
     st.title("👨‍🍳 Control de Producción y Recibos")
     tab_planilla, tab_recibo, tab_historial_recibos = st.tabs(["📝 1. Calcular Planilla (Detalle)", "🧾 2. Emitir Recibo de Pago", "🗄️ 3. Historial de Recibos"])
@@ -839,6 +839,9 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
                     st.download_button(label="Descargar Archivo PDF", data=pdf_reimpresion, file_name=f"Reimpresion_Recibo_{datos_recibo['panadero']}_{datos_recibo['num_recibo']}.pdf", mime="application/pdf", type="primary", use_container_width=True)
         except Exception as e: st.error(f"⚠️ Error de base de datos: {e}")
 
+# ------------------------------------------
+# MÓDULO 9: REPORTE PDF MENSUAL
+# ------------------------------------------
 elif opcion_menu == "📊 Reporte PDF Mensual":
     st.title("📊 Generador de Reporte Financiero (PDF)")
     st.write("Selecciona las fechas para crear un reporte gerencial con gráfica de pastel y resumen de gastos consolidados.")
@@ -853,9 +856,11 @@ elif opcion_menu == "📊 Reporte PDF Mensual":
                 gastos_cat_df = conn.query(query_cat, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
                 query_det = """SELECT c.nombre as categoria, LOWER(g.detalle) as detalle, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id JOIN cortes_diarios cd ON g.corte_id = cd.id WHERE cd.fecha BETWEEN :inicio AND :fin GROUP BY c.nombre, LOWER(g.detalle) ORDER BY c.nombre, total DESC"""
                 gastos_det_df = conn.query(query_det, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
+                
                 query_jeny = """SELECT SUM(monto) as abonos FROM cuenta_ruta_jeny WHERE tipo = 'ABONO' AND fecha BETWEEN :inicio AND :fin"""
                 jeny_totales = conn.query(query_jeny, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
                 ing_jeny = float(jeny_totales.iloc[0]['abonos']) if not jeny_totales.empty and pd.notna(jeny_totales.iloc[0]['abonos']) else 0.0
+                
                 query_rutas = """SELECT SUM(gran_total) as rutas_contado FROM control_rutas WHERE cliente NOT ILIKE '%ORIENTE%' AND cliente NOT ILIKE '%OASIS%' AND cliente NOT ILIKE '%QUALY%' AND fecha_factura BETWEEN :inicio AND :fin"""
                 rutas_totales = conn.query(query_rutas, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
                 ing_rutas = float(rutas_totales.iloc[0]['rutas_contado']) if not rutas_totales.empty and pd.notna(rutas_totales.iloc[0]['rutas_contado']) else 0.0
