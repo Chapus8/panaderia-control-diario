@@ -157,7 +157,8 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_ef
     t_resumen = Table(resumen_data, colWidths=[340, 200]); t_resumen.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('ALIGN', (0,0), (-1,-1), 'LEFT'), ('ALIGN', (1,0), (1,-1), 'RIGHT'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('BACKGROUND', (0,4), (-1,4), colors.HexColor("#EAECEE")), ('BACKGROUND', (0,6), (-1,6), colors.HexColor("#D4EFDF")), ('FONTNAME', (0,4), (-1,4), 'Helvetica-Bold'), ('FONTNAME', (0,6), (-1,6), 'Helvetica-Bold')])); elements.append(t_resumen); doc.build(elements); buffer.seek(0); return buffer
 
 def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gastos_det_df, v_abonos_jeny, v_otras_rutas):
-    buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []; styles = getSampleStyleSheet(); title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50")); subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray); h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
+    buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []; styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50")); subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray); h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
     elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style)); elements.append(Paragraph(f"REPORTE GERENCIAL DE RESULTADOS: {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", subtitle_style)); elements.append(Spacer(1, 20))
     v_efectivo = ingresos_df['efectivo'].sum() if not ingresos_df.empty else 0; v_pedidos_trans = (ingresos_df['pedidos'].sum() + ingresos_df['transferencias'].sum()) if not ingresos_df.empty else 0; t_ingresos = v_efectivo + v_pedidos_trans + v_abonos_jeny + v_otras_rutas; t_gastos = gastos_cat_df['total'].sum() if not gastos_cat_df.empty else 0; utilidad = t_ingresos - t_gastos
     resumen_data = [
@@ -219,6 +220,7 @@ def generar_pdf_recibo(num_recibo, fecha_emision, panadero, f_inicio, f_fin, qq_
     concept_data = [[Paragraph("Por Concepto De:", center_bold)], [Paragraph(f"Salario correspondiente del {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')} a favor de {panadero.upper()}", ParagraphStyle('C', alignment=1, fontSize=12))]]; t_concept = Table(concept_data, colWidths=[530]); t_concept.setStyle(TableStyle([('BACKGROUND', (0,0), (0,0), colors.lightgrey), ('BOX', (0,0), (-1,-1), 1.5, colors.black), ('GRID', (0,0), (-1,-1), 0.5, colors.black), ('BOTTOMPADDING', (0,0), (-1,-1), 8), ('TOPPADDING', (0,0), (-1,-1), 8)])); elements.append(t_concept)
     calc_data = [[f"{qq_total:.2f}", "", ""], ["Quintalaje", f"Q {precio_qq:.2f}", f"Q {subtotal:,.2f}"], ["Septimo", "", f"{septimo:,.2f}"], ["tortas", "", f"{tortas:,.2f}"], ["(-) Tienda", "", f"{tienda:,.2f}"], ["Total A Pagar", "Q", f"{total_pagar:,.2f}"]]; t_calc = Table(calc_data, colWidths=[330, 80, 120]); t_calc.setStyle(TableStyle([('ALIGN', (0,0), (0,-1), 'RIGHT'), ('ALIGN', (1,0), (1,-1), 'CENTER'), ('ALIGN', (2,0), (2,-1), 'RIGHT'), ('FONTNAME', (0,0), (-1,-1), 'Helvetica'), ('FONTNAME', (0,1), (0,1), 'Helvetica-Bold'), ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'), ('BOX', (0,0), (0,0), 1, colors.black), ('BOX', (1,1), (1,1), 1, colors.black), ('BOX', (2,1), (2,-1), 1, colors.black), ('GRID', (2,1), (2,-1), 0.5, colors.black), ('BOX', (0,0), (-1,-1), 1.5, colors.black)])); elements.append(t_calc); elements.append(Spacer(1, 60)); elements.append(Paragraph("__________________________________________", ParagraphStyle('firma', alignment=1))); elements.append(Paragraph(f"Firma de Recibido - {panadero.upper()}", ParagraphStyle('firma', alignment=1))); doc.build(elements); buffer.seek(0); return buffer
 
+
 # ==========================================
 # 4. MENÚ LATERAL (SIDEBAR)
 # ==========================================
@@ -254,7 +256,7 @@ with st.sidebar:
 # ==========================================
 
 # ------------------------------------------
-# MÓDULO: 🚚 RUTA Y PEDIDOS (XML) CON CORRECCIÓN DE NATIVE FLOAT
+# MÓDULO: 🚚 RUTA Y PEDIDOS (XML) 
 # ------------------------------------------
 if opcion_menu == "🚚 Ruta y Pedidos (XML)":
     st.title("🚚 Control de Ruta y Pedidos (Lector SAT)")
@@ -275,7 +277,6 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
         except Exception: pass
         return ["Oasis Jocotan", "Oasis Zacapa", "Oasis Teculutan", "Quali Usumatlan", "Quali San Jorge Zacapa", "Oasis Chiquimula Octava", "Oasis Chiquimula Decima", "Quali El Molino Chiquimula", "Otra Sucursal Oasis"]
 
-    # --- PESTAÑA 1: SUBIR XML ---
     with tab_xml:
         st.markdown("Sube tu archivo `.xml` generado por la SAT para extraer automáticamente los productos.")
         archivo_xml = st.file_uploader("📂 Subir XML de Factura Electrónica (FEL)", type=["xml"])
@@ -342,7 +343,7 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                     df_pan = df_xml[df_xml['Categoría'] == 'Pan / Repostería']
                     df_pasta = df_xml[df_xml['Categoría'] == 'Pasta / Salado']
                     
-                    # LA CORRECCIÓN DEL ERROR ROJO: Forzamos que sean float nativos de Python, no np.float64
+                    # Convertidos a float() nativo de Python para evitar el error psycopg2 InvalidSchemaName np.float64
                     tot_pan = float(df_pan['Total (Q)'].sum()) if not df_pan.empty else 0.0
                     tot_pasta = float(df_pasta['Total (Q)'].sum()) if not df_pasta.empty else 0.0
                     gran_total = float(df_xml['Total (Q)'].sum()) if not df_xml.empty else 0.0
@@ -428,19 +429,55 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                 st.dataframe(df_mostrar_rutas[['fecha_factura', 'sucursal', 'cliente', 'total_pan', 'total_pasta', 'gran_total']], column_config={"fecha_factura": "Fecha", "sucursal": "Sucursal / Destino", "cliente": "Razón Social SAT", "total_pan": st.column_config.NumberColumn("Total Pan (Q)", format="Q %.2f"), "total_pasta": st.column_config.NumberColumn("Total Pasta (Q)", format="Q %.2f"), "gran_total": st.column_config.NumberColumn("Total Factura (Q)", format="Q %.2f")}, hide_index=True, use_container_width=True)
                 
                 st.markdown("---")
-                st.markdown("#### 🗑️ Eliminar Factura Subida por Error")
-                opciones_borrar = df_rutas_hist.apply(lambda row: f"ID: {row['id']} | Fecha: {pd.to_datetime(row['fecha_factura']).strftime('%d/%m/%Y')} | Sucursal: {row.get('sucursal', row['cliente'])} | Total: Q {row['gran_total']}", axis=1).tolist()
-                ruta_a_borrar = st.selectbox("Selecciona la factura a eliminar:", opciones_borrar)
                 
-                if st.button("🗑️ Eliminar Factura Seleccionada", type="secondary"):
-                    idx_seleccion = opciones_borrar.index(ruta_a_borrar); datos_ruta = df_rutas_hist.iloc[idx_seleccion]
-                    ruta_id = int(datos_ruta['id']); fecha_ruta = datos_ruta['fecha_factura']; monto_pan = float(datos_ruta['total_pan']); cli_nombre = datos_ruta['cliente']
-                    with conn.session as s:
-                        s.execute(text("DELETE FROM control_rutas WHERE id = :id"), {"id": ruta_id})
-                        if "ORIENTE" in cli_nombre.upper() or "OASIS" in cli_nombre.upper() or "QUALY" in cli_nombre.upper():
-                            s.execute(text("DELETE FROM cuenta_ruta_jeny WHERE tipo = 'CARGO' AND fecha = :f AND monto = :m"), {"f": fecha_ruta, "m": monto_pan})
-                        s.commit()
-                    st.success("✅ ¡Factura y deuda eliminadas correctamente!"); st.rerun()
+                # --- NUEVA FUNCIÓN PARA EDITAR O BORRAR FACTURAS EQUIVOCADAS ---
+                col_edit, col_del = st.columns(2)
+                
+                # EDITAR SUCURSAL
+                with col_edit:
+                    st.markdown("#### ✏️ Corregir Sucursal")
+                    st.write("Si te equivocaste de sucursal al guardar, cámbiala aquí:")
+                    opciones_edit = df_rutas_hist.apply(lambda row: f"ID: {row['id']} | Fecha: {pd.to_datetime(row['fecha_factura']).strftime('%d/%m/%Y')} | Sucursal actual: {row.get('sucursal', row['cliente'])}", axis=1).tolist()
+                    ruta_a_editar = st.selectbox("Selecciona la factura:", opciones_edit, key="sel_edit")
+                    nueva_suc_correcta = st.selectbox("Nueva Sucursal Correcta:", obtener_lista_sucursales())
+                    
+                    if st.button("💾 Guardar Corrección", type="primary"):
+                        idx_edit = opciones_edit.index(ruta_a_editar)
+                        datos_edit = df_rutas_hist.iloc[idx_edit]
+                        
+                        id_edit = int(datos_edit['id'])
+                        f_edit = datos_edit['fecha_factura']
+                        m_edit = float(datos_edit['total_pan'])
+                        suc_vieja = datos_edit.get('sucursal', datos_edit['cliente'])
+                        cli_nombre_edit = datos_edit['cliente']
+                        
+                        with conn.session as s:
+                            s.execute(text("UPDATE control_rutas SET sucursal = :ns WHERE id = :id"), {"ns": nueva_suc_correcta, "id": id_edit})
+                            if "ORIENTE" in cli_nombre_edit.upper() or "OASIS" in cli_nombre_edit.upper() or "QUALY" in cli_nombre_edit.upper():
+                                s.execute(text("UPDATE cuenta_ruta_jeny SET detalle = :nd WHERE tipo = 'CARGO' AND fecha = :f AND monto = :m AND detalle = :vd"), 
+                                          {"nd": f"Pan - {nueva_suc_correcta}", "f": f_edit, "m": m_edit, "vd": f"Pan - {suc_vieja}"})
+                            s.commit()
+                        st.success("✅ ¡Sucursal corregida con éxito!")
+                        st.rerun()
+
+                # ELIMINAR FACTURA
+                with col_del:
+                    st.markdown("#### 🗑️ Eliminar Factura")
+                    st.write("Si el XML es incorrecto, bórralo por completo del sistema.")
+                    opciones_borrar = df_rutas_hist.apply(lambda row: f"ID: {row['id']} | Fecha: {pd.to_datetime(row['fecha_factura']).strftime('%d/%m/%Y')} | Total: Q {row['gran_total']}", axis=1).tolist()
+                    ruta_a_borrar = st.selectbox("Selecciona para eliminar:", opciones_borrar, key="sel_del")
+                    
+                    if st.button("🗑️ Eliminar Definitivamente", type="secondary"):
+                        idx_del = opciones_borrar.index(ruta_a_borrar)
+                        datos_del = df_rutas_hist.iloc[idx_del]
+                        id_del = int(datos_del['id']); f_del = datos_del['fecha_factura']; m_del = float(datos_del['total_pan']); cli_del = datos_del['cliente']
+                        with conn.session as s:
+                            s.execute(text("DELETE FROM control_rutas WHERE id = :id"), {"id": id_del})
+                            if "ORIENTE" in cli_del.upper() or "OASIS" in cli_del.upper() or "QUALY" in cli_del.upper():
+                                s.execute(text("DELETE FROM cuenta_ruta_jeny WHERE tipo = 'CARGO' AND fecha = :f AND monto = :m"), {"f": f_del, "m": m_del})
+                            s.commit()
+                        st.success("✅ ¡Factura (y deuda) eliminadas!")
+                        st.rerun()
             else: st.info("No hay rutas guardadas todavía.")
         except Exception as e: st.caption(f"Error al cargar historial: {e}")
 
@@ -506,10 +543,10 @@ if opcion_menu == "🚚 Ruta y Pedidos (XML)":
                     with conn.session as s: s.execute(text("DELETE FROM sucursales_oasis WHERE id = :id"), {"id": int(id_borrar)}); s.commit()
                     st.success("🗑️ Sucursal eliminada de la lista desplegable."); st.rerun()
             else: st.info("No hay sucursales configuradas. Usa el panel de arriba para agregar una.")
-        except Exception as e: st.error(f"⚠️ Debes crear la tabla 'sucursales_oasis' en tu base de datos Neon.")
+        except Exception as e: st.error(f"⚠️ Debes crear la tabla 'sucursales_oasis' en tu base de datos Neon. Revisa el Paso 1.")
 
 # ------------------------------------------
-# MÓDULO 1: REGISTRO DE CORTE
+# MÓDULOS DE REGISTRO, HISTORIAL, ESTADÍSTICAS, COMPARATIVA, DÍAS ESTRELLA, PROVEEDORES, PLANILLA Y REPORTE MENSUAL
 # ------------------------------------------
 elif opcion_menu == "📝 Registro de Corte":
     st.title("🍞 Ingreso Diario de Corte")
@@ -583,9 +620,6 @@ elif opcion_menu == "📝 Registro de Corte":
     if 'pdf_generado' in st.session_state:
         st.markdown("---"); st.download_button(label="📥 Descargar PDF del Corte para Imprimir", data=st.session_state['pdf_generado'], file_name=st.session_state['pdf_nombre'], mime="application/pdf", type="secondary", use_container_width=True)
 
-# ------------------------------------------
-# MÓDULO 2: HISTORIAL DE CORTES
-# ------------------------------------------
 elif opcion_menu == "📅 Historial de Cortes":
     st.title("📅 Consulta de Historial e Impresión")
     fecha_consulta = st.date_input("Consultar fecha:", get_fecha_guate(), format="DD/MM/YYYY")
@@ -619,9 +653,6 @@ elif opcion_menu == "📅 Historial de Cortes":
         else: st.warning(f"No hay ningún corte guardado en el sistema para la fecha {fecha_consulta.strftime('%d/%m/%Y')}.")
     except Exception as e: st.error("Error al consultar el historial.")
 
-# ------------------------------------------
-# MÓDULO 3: ESTADÍSTICAS
-# ------------------------------------------
 elif opcion_menu == "📈 Estadísticas":
     st.title("📈 Estadísticas y Finanzas")
     meses_dict = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
@@ -652,9 +683,6 @@ elif opcion_menu == "📈 Estadísticas":
         else: st.info(f"📊 No hay gastos registrados para el mes de {mes_seleccionado} {anio_seleccionado}.")
     except Exception as e: st.error(f"Error al cargar las estadísticas: {e}")
 
-# ------------------------------------------
-# MÓDULO 4: COMPARATIVA DIARIA
-# ------------------------------------------
 elif opcion_menu == "📆 Comparativa Diaria":
     st.title("📆 Comparativa de Ingresos vs Gastos por Día")
     hoy = get_fecha_guate(); primer_dia_mes = hoy.replace(day=1)
@@ -686,9 +714,6 @@ elif opcion_menu == "📆 Comparativa Diaria":
                     st.download_button(label="📥 Descargar Comparativa en PDF", data=pdf_comparativa, file_name=f"Comparativa_Diaria_{fecha_inicio_comp.strftime('%d-%m-%Y')}_al_{fecha_fin_comp.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
             except Exception as e: st.error(f"Error al cargar la comparativa: {e}")
 
-# ------------------------------------------
-# MÓDULO 5: DÍAS ESTRELLA
-# ------------------------------------------
 elif opcion_menu == "🏆 Días Estrella":
     st.title("🏆 Días Estrella (Rendimiento Semanal)")
     hoy = get_fecha_guate(); primer_dia_mes = hoy.replace(day=1)
@@ -707,7 +732,7 @@ elif opcion_menu == "🏆 Días Estrella":
                     ) sub GROUP BY fecha
                 """
                 df_ing_dias = conn.query(q_ing_full, params={"inicio": fecha_inicio_est, "fin": fecha_fin_est}, ttl=0)
-                if df_ing_dias.empty or df_ing_dias['ingresos'].sum() == 0: st.warning("No hay ventas registradas en ese rango.")
+                if df_ing_dias.empty or df_ing_dias['ingresos'].sum() == 0: st.warning("No hay ventas registradas en ese rango para hacer el análisis.")
                 else:
                     dias_espanol = {'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles', 'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'}
                     df_ing_dias['fecha'] = pd.to_datetime(df_ing_dias['fecha']); df_ing_dias['nombre_dia'] = df_ing_dias['fecha'].dt.day_name().map(dias_espanol)
@@ -721,9 +746,6 @@ elif opcion_menu == "🏆 Días Estrella":
                     pdf_estrellas = generar_pdf_dias_estrella(fecha_inicio_est, fecha_fin_est, df_agrupado, mejor_dia_nombre, peor_dia_nombre, promedio_general, dia_record); st.download_button(label="📥 Descargar Análisis en PDF", data=pdf_estrellas, file_name=f"Dias_Estrella_{fecha_inicio_est.strftime('%d-%m-%Y')}_al_{fecha_fin_est.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
             except Exception as e: st.error(f"Error al cargar el análisis: {e}")
 
-# ------------------------------------------
-# MÓDULO 7: PROVEEDORES
-# ------------------------------------------
 elif opcion_menu == "💳 Proveedores":
     st.title("💳 Control de Créditos y Proveedores")
     try:
@@ -771,9 +793,6 @@ elif opcion_menu == "💳 Proveedores":
                 st.dataframe(deudas_activas, column_config={"vencimiento": st.column_config.DateColumn("Vencimiento", format="DD/MM/YYYY"), "saldo": st.column_config.NumberColumn("Saldo Pendiente", format="Q %.2f")}, use_container_width=True, hide_index=True)
     except Exception as e: st.error(f"Error: {e}")
 
-# ------------------------------------------
-# MÓDULO 8: PLANILLA PANADEROS
-# ------------------------------------------
 elif opcion_menu == "👨‍🍳 Planilla Panaderos":
     st.title("👨‍🍳 Control de Producción y Recibos")
     tab_planilla, tab_recibo, tab_historial_recibos = st.tabs(["📝 1. Calcular Planilla (Detalle)", "🧾 2. Emitir Recibo de Pago", "🗄️ 3. Historial de Recibos"])
@@ -839,9 +858,6 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
                     st.download_button(label="Descargar Archivo PDF", data=pdf_reimpresion, file_name=f"Reimpresion_Recibo_{datos_recibo['panadero']}_{datos_recibo['num_recibo']}.pdf", mime="application/pdf", type="primary", use_container_width=True)
         except Exception as e: st.error(f"⚠️ Error de base de datos: {e}")
 
-# ------------------------------------------
-# MÓDULO 9: REPORTE PDF MENSUAL
-# ------------------------------------------
 elif opcion_menu == "📊 Reporte PDF Mensual":
     st.title("📊 Generador de Reporte Financiero (PDF)")
     st.write("Selecciona las fechas para crear un reporte gerencial con gráfica de pastel y resumen de gastos consolidados.")
@@ -856,11 +872,9 @@ elif opcion_menu == "📊 Reporte PDF Mensual":
                 gastos_cat_df = conn.query(query_cat, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
                 query_det = """SELECT c.nombre as categoria, LOWER(g.detalle) as detalle, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id JOIN cortes_diarios cd ON g.corte_id = cd.id WHERE cd.fecha BETWEEN :inicio AND :fin GROUP BY c.nombre, LOWER(g.detalle) ORDER BY c.nombre, total DESC"""
                 gastos_det_df = conn.query(query_det, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
-                
                 query_jeny = """SELECT SUM(monto) as abonos FROM cuenta_ruta_jeny WHERE tipo = 'ABONO' AND fecha BETWEEN :inicio AND :fin"""
                 jeny_totales = conn.query(query_jeny, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
                 ing_jeny = float(jeny_totales.iloc[0]['abonos']) if not jeny_totales.empty and pd.notna(jeny_totales.iloc[0]['abonos']) else 0.0
-                
                 query_rutas = """SELECT SUM(gran_total) as rutas_contado FROM control_rutas WHERE cliente NOT ILIKE '%ORIENTE%' AND cliente NOT ILIKE '%OASIS%' AND cliente NOT ILIKE '%QUALY%' AND fecha_factura BETWEEN :inicio AND :fin"""
                 rutas_totales = conn.query(query_rutas, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
                 ing_rutas = float(rutas_totales.iloc[0]['rutas_contado']) if not rutas_totales.empty and pd.notna(rutas_totales.iloc[0]['rutas_contado']) else 0.0
