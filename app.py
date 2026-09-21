@@ -5,7 +5,7 @@ from datetime import datetime
 import pytz
 import plotly.express as px
 from reportlab.lib.pagesizes import letter, landscape
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.graphics.shapes import Drawing
@@ -62,18 +62,9 @@ def numero_a_letras(numero):
     return f"{letras.strip()} CON {decimal:02d}/100"
 
 # ==========================================
-# 3. CONEXIÓN A BASE DE DATOS Y FUNCIONES
-# ==========================================
-try:
-    conn = st.connection("postgresql", type="sql", pool_pre_ping=True)
-except Exception as e:
-    st.error("🔴 Error de conexión con la base de datos."); st.stop()
-
-# ==========================================
 # 2. SISTEMA DE SEGURIDAD (LOGIN DINÁMICO)
 # ==========================================
 if 'logueado' not in st.session_state: st.session_state['logueado'] = False
-
 if not st.session_state['logueado']:
     st.markdown("<h1 style='text-align: center;'>🍞 Panadería Judith</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: gray;'>Acceso Seguro</h3>", unsafe_allow_html=True)
@@ -95,6 +86,14 @@ if not st.session_state['logueado']:
                 else: st.error("❌ Usuario o contraseña incorrectos")
     st.stop()
 
+# ==========================================
+# 3. CONEXIÓN A BASE DE DATOS Y FUNCIONES
+# ==========================================
+try:
+    conn = st.connection("postgresql", type="sql", pool_pre_ping=True)
+except Exception as e:
+    st.error("🔴 Error de conexión con la base de datos."); st.stop()
+
 def obtener_o_crear_corte(fecha_corte):
     with conn.session as s:
         result = s.execute(text("SELECT id FROM cortes_diarios WHERE fecha = :fecha"), {"fecha": fecha_corte}).fetchone()
@@ -115,7 +114,7 @@ def autocompletar_categoria(d):
     if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota)\b', d): return 'PRESTAMOS E INTERESES'
     return 'OTROS GASTOS' 
 
-# -- FUNCIONES PDF --
+# -- FUNCIONES PDF (Compactadas) --
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_efectivo, pago_pedidos, transferencias):
     buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []; styles = getSampleStyleSheet()
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50")); subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray); bold_style = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontSize=10, fontName="Helvetica-Bold")
@@ -163,7 +162,7 @@ def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gas
 def generar_pdf_comparativa_diaria(f_inicio, f_fin, df_resumen, t_ing, t_gas, t_uti):
     buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []; styles = getSampleStyleSheet()
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=16, alignment=1, textColor=colors.HexColor("#2C3E50")); subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.gray); h2_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
-    elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style)); elements.append(Paragraph(f"REPORTE COMPARATIVO DIARIO (INCLUYE RUTAS, ABONOS Y VENTAS EXTRA): {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", subtitle_style)); elements.append(Spacer(1, 15))
+    elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style)); elements.append(Paragraph(f"REPORTE COMPARATIVO DIARIO (INCLUYE RUTAS Y ABONOS): {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", subtitle_style)); elements.append(Spacer(1, 15))
     resumen_data = [["TOTAL INGRESOS GLOBAL", "TOTAL GASTOS", "UTILIDAD NETA"], [f"Q {t_ing:,.2f}", f"Q {t_gas:,.2f}", f"Q {t_uti:,.2f}"]]; t_resumen = Table(resumen_data, colWidths=[150, 150, 150]); t_resumen.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('BOTTOMPADDING', (0,0), (-1,0), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold')])); elements.append(t_resumen); elements.append(Spacer(1, 20))
     elements.append(Paragraph("<b>Gráfica Comparativa: Ingresos vs Gastos</b>", h2_style)); d = Drawing(480, 200); bc = VerticalBarChart(); bc.x = 40; bc.y = 40; bc.height = 140; bc.width = 420; bc.data = [df_resumen['ingresos'].tolist(), df_resumen['gastos'].tolist()]; bc.strokeColor = colors.white; bc.valueAxis.valueMin = 0; bc.categoryAxis.categoryNames = [fecha.strftime('%d/%m') for fecha in df_resumen['fecha']]; bc.categoryAxis.labels.angle = 45; bc.categoryAxis.labels.dy = -10; bc.categoryAxis.labels.fontSize = 8; bc.bars[0].fillColor = colors.HexColor("#27AE60") ; bc.bars[1].fillColor = colors.HexColor("#E74C3C") 
     leg = Legend(); leg.x = 350; leg.y = 180; leg.alignment = 'right'; leg.colorNamePairs = [(colors.HexColor("#27AE60"), 'Total Ingresos'), (colors.HexColor("#E74C3C"), 'Total Gastos')]; leg.fontSize = 8; leg.boxAnchor = 'nw'; d.add(bc); d.add(leg); elements.append(d); elements.append(Spacer(1, 20))
@@ -180,42 +179,6 @@ def generar_pdf_dias_estrella(f_inicio, f_fin, df_agrupado, mejor_dia, peor_dia,
     elements.append(Paragraph("<b>Tabla de Promedios Diarios</b>", h2_style)); det_data = [["DÍA DE LA SEMANA", "PROMEDIO DE INGRESOS"]]
     for index, row in df_agrupado.iterrows(): det_data.append([str(row['nombre_dia']), f"Q {row['promedio_ventas']:,.2f}"])
     t_det = Table(det_data, colWidths=[200, 200]); t_det.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#34495E")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('ALIGN', (0,0), (0,-1), 'CENTER'), ('ALIGN', (1,0), (-1,-1), 'RIGHT'), ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)])); elements.append(t_det); doc.build(elements); buffer.seek(0); return buffer
-
-def generar_pdf_planilla_empleados(f_inicio, f_fin, df_calc):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
-    elements = []
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=14, alignment=1, textColor=colors.HexColor("#2C3E50"))
-    subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=12, alignment=1, textColor=colors.black, spaceAfter=20)
-    elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style))
-    elements.append(Paragraph(f"<b>Planilla correspondiente del:</b> {f_inicio.strftime('%d/%m/%Y')} <b>al</b> {f_fin.strftime('%d/%m/%Y')}", subtitle_style))
-    data = [
-        ["No.", "NOMBRES Y APELLIDOS", "SUELDO", "DÍAS", "TOTAL", "COMISIONES", "BONO", "TOTAL", "DESCUENTOS", "", "", "TOTAL DE", "LÍQUIDO A"],
-        ["", "DE LOS TRABAJADORES", "QUINCENAL", "LAB.", "PROP.", "S/ VENTAS", "14", "DEVENGADO", "ANTICIPOS", "IGSS", "TIENDA", "DESCUENTOS", "RECIBIR"]
-    ]
-    sum_sueldo = 0; sum_total_prop = 0; sum_comis = 0; sum_bono = 0; sum_dev = 0
-    sum_ant = 0; sum_igss = 0; sum_tienda = 0; sum_desc = 0; sum_liq = 0
-    for i, row in df_calc.iterrows():
-        data.append([
-            str(i+1), str(row['Empleado']), f"{row['Sueldo Quincenal']:.2f}" if row['Sueldo Quincenal'] else "-", f"{row['Días Laborados']:.2f}",
-            f"{row['Sueldo Prop.']:.2f}", f"{row['Comisiones']:.2f}" if row['Comisiones'] else "-", f"{row['Bono 14']:.2f}" if row['Bono 14'] else "-",
-            f"{row['Total Devengado']:.2f}", f"{row['Anticipos']:.2f}" if row['Anticipos'] else "-", f"{row['IGSS']:.2f}" if row['IGSS'] else "-",
-            f"{row['Tienda']:.2f}" if row['Tienda'] else "-", f"{row['Total Descuentos']:.2f}" if row['Total Descuentos'] else "-", f"{row['Líquido a Recibir']:.2f}"
-        ])
-        sum_sueldo += row['Sueldo Quincenal']; sum_total_prop += row['Sueldo Prop.']; sum_comis += row['Comisiones']; sum_bono += row['Bono 14']; sum_dev += row['Total Devengado']
-        sum_ant += row['Anticipos']; sum_igss += row['IGSS']; sum_tienda += row['Tienda']; sum_desc += row['Total Descuentos']; sum_liq += row['Líquido a Recibir']
-    data.append(["", "TOTALES", f"{sum_sueldo:.2f}", "", f"{sum_total_prop:.2f}", f"{sum_comis:.2f}", f"{sum_bono:.2f}", f"{sum_dev:.2f}", f"{sum_ant:.2f}", f"{sum_igss:.2f}", f"{sum_tienda:.2f}", f"{sum_desc:.2f}", f"{sum_liq:.2f}"])
-    t = Table(data, colWidths=[25, 120, 60, 40, 50, 60, 50, 65, 55, 45, 45, 65, 65])
-    t.setStyle(TableStyle([
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('FONTNAME', (0,0), (-1,1), 'Helvetica-Bold'), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#2980B9")),
-        ('SPAN', (0,0), (0,1)), ('SPAN', (1,0), (1,1)), ('SPAN', (2,0), (2,1)), ('SPAN', (3,0), (3,1)), ('SPAN', (4,0), (4,1)), ('SPAN', (5,0), (5,1)), ('SPAN', (6,0), (6,1)), ('SPAN', (7,0), (7,1)), 
-        ('SPAN', (8,0), (10,0)), ('SPAN', (11,0), (11,1)), ('SPAN', (12,0), (12,1)), ('TEXTCOLOR', (0,0), (-1,1), colors.HexColor("#1A5276")), ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'), ('SPAN', (0,-1), (1,-1))
-    ]))
-    elements.append(t); elements.append(Spacer(1, 40))
-    sig_data = [["___________________________", "___________________________"], ["Elaborado Por", "Revisado / Autorizado"]]
-    t_sig = Table(sig_data, colWidths=[250, 250]); t_sig.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold')]))
-    elements.append(t_sig); doc.build(elements); buffer.seek(0); return buffer
 
 def generar_pdf_recibo_venta_extra(fecha_emision, cliente, df_items, total):
     buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40); elements = []
@@ -254,6 +217,89 @@ def generar_pdf_recibo_panadero(num_recibo, fecha_emision, panadero, f_inicio, f
     concept_data = [[Paragraph("Por Concepto De:", center_bold)], [Paragraph(f"Salario correspondiente del {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')} a favor de {panadero.upper()}", ParagraphStyle('C', alignment=1, fontSize=12))]]; t_concept = Table(concept_data, colWidths=[530]); t_concept.setStyle(TableStyle([('BACKGROUND', (0,0), (0,0), colors.lightgrey), ('BOX', (0,0), (-1,-1), 1.5, colors.black), ('GRID', (0,0), (-1,-1), 0.5, colors.black), ('BOTTOMPADDING', (0,0), (-1,-1), 8), ('TOPPADDING', (0,0), (-1,-1), 8)])); elements.append(t_concept)
     calc_data = [[f"{qq_total:.2f}", "", ""], ["Quintalaje", f"Q {precio_qq:.2f}", f"Q {subtotal:,.2f}"], ["Septimo", "", f"{septimo:,.2f}"], ["tortas", "", f"{tortas:,.2f}"], ["(-) Tienda", "", f"{tienda:,.2f}"], ["Total A Pagar", "Q", f"{total_pagar:,.2f}"]]; t_calc = Table(calc_data, colWidths=[330, 80, 120]); t_calc.setStyle(TableStyle([('ALIGN', (0,0), (0,-1), 'RIGHT'), ('ALIGN', (1,0), (1,-1), 'CENTER'), ('ALIGN', (2,0), (2,-1), 'RIGHT'), ('FONTNAME', (0,0), (-1,-1), 'Helvetica'), ('FONTNAME', (0,1), (0,1), 'Helvetica-Bold'), ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'), ('BOX', (0,0), (0,0), 1, colors.black), ('BOX', (1,1), (1,1), 1, colors.black), ('BOX', (2,1), (2,-1), 1, colors.black), ('GRID', (2,1), (2,-1), 0.5, colors.black), ('BOX', (0,0), (-1,-1), 1.5, colors.black)])); elements.append(t_calc); elements.append(Spacer(1, 60)); elements.append(Paragraph("__________________________________________", ParagraphStyle('firma', alignment=1))); elements.append(Paragraph(f"Firma de Recibido - {panadero.upper()}", ParagraphStyle('firma', alignment=1))); doc.build(elements); buffer.seek(0); return buffer
 
+def generar_pdf_planilla_empleados_resumen(f_inicio, f_fin, df_calc):
+    buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20); elements = []; styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=14, alignment=1, textColor=colors.HexColor("#2C3E50")); subtitle_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=12, alignment=1, textColor=colors.black, spaceAfter=20)
+    elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style)); elements.append(Paragraph(f"<b>Planilla correspondiente del:</b> {f_inicio.strftime('%d/%m/%Y')} <b>al</b> {f_fin.strftime('%d/%m/%Y')}", subtitle_style))
+    data = [["No.", "NOMBRES Y APELLIDOS", "SUELDO", "DÍAS", "TOTAL", "COMISIONES", "BONO", "TOTAL", "DESCUENTOS", "", "", "TOTAL DE", "LÍQUIDO A"], ["", "DE LOS TRABAJADORES", "QUINCENAL", "LAB.", "PROP.", "S/ VENTAS", "14", "DEVENGADO", "ANTICIPOS", "IGSS", "TIENDA", "DESCUENTOS", "RECIBIR"]]
+    sum_sueldo = 0; sum_total_prop = 0; sum_comis = 0; sum_bono = 0; sum_dev = 0; sum_ant = 0; sum_igss = 0; sum_tienda = 0; sum_desc = 0; sum_liq = 0
+    for i, row in df_calc.iterrows():
+        data.append([str(i+1), str(row['Empleado']), f"{row['Sueldo Quincenal']:.2f}" if row['Sueldo Quincenal'] else "-", f"{row['Días Laborados']:.2f}", f"{row['Sueldo Prop.']:.2f}", f"{row['Comisiones']:.2f}" if row['Comisiones'] else "-", f"{row['Bono 14']:.2f}" if row['Bono 14'] else "-", f"{row['Total Devengado']:.2f}", f"{row['Anticipos']:.2f}" if row['Anticipos'] else "-", f"{row['IGSS']:.2f}" if row['IGSS'] else "-", f"{row['Tienda']:.2f}" if row['Tienda'] else "-", f"{row['Total Descuentos']:.2f}" if row['Total Descuentos'] else "-", f"{row['Líquido a Recibir']:.2f}"])
+        sum_sueldo += row['Sueldo Quincenal']; sum_total_prop += row['Sueldo Prop.']; sum_comis += row['Comisiones']; sum_bono += row['Bono 14']; sum_dev += row['Total Devengado']; sum_ant += row['Anticipos']; sum_igss += row['IGSS']; sum_tienda += row['Tienda']; sum_desc += row['Total Descuentos']; sum_liq += row['Líquido a Recibir']
+    data.append(["", "TOTALES", f"{sum_sueldo:.2f}", "", f"{sum_total_prop:.2f}", f"{sum_comis:.2f}", f"{sum_bono:.2f}", f"{sum_dev:.2f}", f"{sum_ant:.2f}", f"{sum_igss:.2f}", f"{sum_tienda:.2f}", f"{sum_desc:.2f}", f"{sum_liq:.2f}"])
+    t = Table(data, colWidths=[25, 120, 60, 40, 50, 60, 50, 65, 55, 45, 45, 65, 65]); t.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('FONTNAME', (0,0), (-1,1), 'Helvetica-Bold'), ('FONTSIZE', (0,0), (-1,-1), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#2980B9")), ('SPAN', (0,0), (0,1)), ('SPAN', (1,0), (1,1)), ('SPAN', (2,0), (2,1)), ('SPAN', (3,0), (3,1)), ('SPAN', (4,0), (4,1)), ('SPAN', (5,0), (5,1)), ('SPAN', (6,0), (6,1)), ('SPAN', (7,0), (7,1)), ('SPAN', (8,0), (10,0)), ('SPAN', (11,0), (11,1)), ('SPAN', (12,0), (12,1)), ('TEXTCOLOR', (0,0), (-1,1), colors.HexColor("#1A5276")), ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'), ('SPAN', (0,-1), (1,-1))]))
+    elements.append(t); elements.append(Spacer(1, 40)); sig_data = [["___________________________", "___________________________"], ["Elaborado Por", "Revisado / Autorizado"]]; t_sig = Table(sig_data, colWidths=[250, 250]); t_sig.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold')])); elements.append(t_sig)
+    doc.build(elements); buffer.seek(0); return buffer
+
+# --- NUEVA FUNCIÓN: RECIBOS INDIVIDUALES PARA EMPLEADOS (BOLETAS DE PAGO) ---
+def generar_pdf_recibos_quincenales(f_inicio, f_fin, df_calc):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+    elements = []
+    
+    title_style = ParagraphStyle('Title', fontName="Helvetica-Bold", fontSize=18, textColor=colors.HexColor("#2980B9"), alignment=1)
+    sub_style = ParagraphStyle('Sub', fontName="Helvetica", fontSize=12, alignment=1)
+    lbl_style = ParagraphStyle('Lbl', fontName="Helvetica-Bold", fontSize=11)
+    val_style = ParagraphStyle('Val', fontName="Helvetica", fontSize=11)
+
+    for index, row in df_calc.iterrows():
+        emp = str(row['Empleado']).strip()
+        if not emp or emp.lower() == 'nan': continue
+        
+        elements.append(Paragraph("<b>PANADERÍA Y REPOSTERÍA JUDITH</b>", title_style))
+        elements.append(Paragraph("BOLETA DE PAGO DE SALARIO", sub_style))
+        elements.append(Spacer(1, 20))
+        
+        info_data = [
+            [Paragraph("<b>Empleado:</b>", lbl_style), Paragraph(emp.upper(), val_style)],
+            [Paragraph("<b>Período:</b>", lbl_style), Paragraph(f"Del {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}", val_style)]
+        ]
+        t_info = Table(info_data, colWidths=[80, 400])
+        t_info.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'LEFT'), ('BOTTOMPADDING', (0,0), (-1,-1), 8)]))
+        elements.append(t_info)
+        elements.append(Spacer(1, 15))
+        
+        calc_data = [
+            ["INGRESOS", "", "DESCUENTOS", ""],
+            ["Sueldo Base", f"Q {row['Sueldo Quincenal']:.2f}", "Anticipos", f"Q {row['Anticipos']:.2f}"],
+            [f"Días Laborados ({row['Días Laborados']} d)", "", "IGSS", f"Q {row['IGSS']:.2f}"],
+            ["Sueldo Proporcional", f"Q {row['Sueldo Prop.']:.2f}", "Tienda", f"Q {row['Tienda']:.2f}"],
+            ["Comisiones", f"Q {row['Comisiones']:.2f}", "", ""],
+            ["Bono 14", f"Q {row['Bono 14']:.2f}", "", ""],
+            ["TOTAL DEVENGADO", f"Q {row['Total Devengado']:.2f}", "TOTAL DESCUENTOS", f"Q {row['Total Descuentos']:.2f}"]
+        ]
+        
+        t_calc = Table(calc_data, colWidths=[150, 100, 150, 100])
+        t_calc.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#34495E")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('ALIGN', (1,1), (1,-1), 'RIGHT'), ('ALIGN', (3,1), (3,-1), 'RIGHT'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey), ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+            ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor("#EAFAF1"))
+        ]))
+        elements.append(t_calc)
+        elements.append(Spacer(1, 15))
+        
+        liquido = float(row['Líquido a Recibir'])
+        liq_letras = numero_a_letras(liquido)
+        net_data = [
+            [Paragraph("<b>LÍQUIDO A RECIBIR:</b>", lbl_style), Paragraph(f"<b>Q {liquido:,.2f}</b>", ParagraphStyle('N', fontSize=14, fontName="Helvetica-Bold", alignment=2, textColor=colors.HexColor("#27AE60")))],
+            [Paragraph("<b>Cantidad en letras:</b>", lbl_style), Paragraph(liq_letras, val_style)]
+        ]
+        t_net = Table(net_data, colWidths=[120, 380])
+        t_net.setStyle(TableStyle([('BOX', (0,0), (-1,-1), 1.5, colors.black), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('PADDING', (0,0), (-1,-1), 10)]))
+        elements.append(t_net)
+        
+        elements.append(Spacer(1, 60))
+        elements.append(Paragraph("__________________________________________", ParagraphStyle('firma', alignment=1)))
+        elements.append(Paragraph(f"Firma de Recibido - {emp.upper()}", ParagraphStyle('firma', alignment=1)))
+        
+        elements.append(PageBreak())
+        
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
 # ==========================================
 # 4. MENÚ LATERAL (SIDEBAR)
 # ==========================================
@@ -276,7 +322,7 @@ with st.sidebar:
 # ==========================================
 
 # ------------------------------------------
-# MÓDULO ACTUALIZADO: 👩‍💼 PLANILLA QUINCENAL (CON SEGURO DE EDICIÓN)
+# MÓDULO ACTUALIZADO: 👩‍💼 PLANILLA QUINCENAL (CON RECIBOS INDIVIDUALES)
 # ------------------------------------------
 if opcion_menu == "👩‍💼 Planilla Quincenal":
     st.title("👩‍💼 Control de Planilla Quincenal (Empleados)")
@@ -291,7 +337,7 @@ if opcion_menu == "👩‍💼 Planilla Quincenal":
     if 'quin_f_fin' not in st.session_state: st.session_state.quin_f_fin = get_fecha_guate().replace(day=15)
     if 'planilla_quin_df' not in st.session_state:
         st.session_state.planilla_quin_df = pd.DataFrame({
-            "Empleado": empleados_base + [""] * 5, "Sueldo Quincenal": [1675.00, 1475.00, 0.0, 0.0, 1000.00] + [0.0]*6,
+            "Empleado": empleados_base + [""] * 5, "Sueldo Quincenal": [1675.00, 1475.00, 0.0, 0.0, 2000.00] + [0.0]*6,
             "Días Laborados": [15.0]*11, "Comisiones": [0.0]*11, "Bono 14": [0.0]*11, "Anticipos": [0.0]*11, "IGSS": [0.0]*11, "Tienda": [0.0]*11
         })
 
@@ -304,19 +350,13 @@ if opcion_menu == "👩‍💼 Planilla Quincenal":
         f_fin_quin = col2.date_input("Al:", st.session_state.quin_f_fin, format="DD/MM/YYYY")
 
         st.markdown("---")
-        
         config_cols = {
-            "Empleado": st.column_config.TextColumn("👤 Empleado"),
-            "Sueldo Quincenal": st.column_config.NumberColumn("Sueldo Base", format="%.2f"),
-            "Días Laborados": st.column_config.NumberColumn("Días Lab.", format="%.2f"),
-            "Comisiones": st.column_config.NumberColumn("Comisiones", format="%.2f"),
-            "Bono 14": st.column_config.NumberColumn("Bono 14", format="%.2f"),
-            "Anticipos": st.column_config.NumberColumn("Anticipos", format="%.2f"),
-            "IGSS": st.column_config.NumberColumn("IGSS", format="%.2f"),
-            "Tienda": st.column_config.NumberColumn("Tienda", format="%.2f"),
+            "Empleado": st.column_config.TextColumn("👤 Empleado"), "Sueldo Quincenal": st.column_config.NumberColumn("Sueldo Base", format="%.2f"),
+            "Días Laborados": st.column_config.NumberColumn("Días Lab.", format="%.2f"), "Comisiones": st.column_config.NumberColumn("Comisiones", format="%.2f"),
+            "Bono 14": st.column_config.NumberColumn("Bono 14", format="%.2f"), "Anticipos": st.column_config.NumberColumn("Anticipos", format="%.2f"),
+            "IGSS": st.column_config.NumberColumn("IGSS", format="%.2f"), "Tienda": st.column_config.NumberColumn("Tienda", format="%.2f"),
         }
 
-        # --- SEGURO DE EDICIÓN: El formulario evita que se borre todo al cambiar de celda ---
         with st.form("form_edicion_quin"):
             st.info("💡 **Seguro de Edición Activado:** Llena las casillas tranquilamente. No se borrará nada. Al terminar, presiona el botón verde de abajo para calcular los totales.")
             df_edit_quin = st.data_editor(st.session_state.planilla_quin_df, column_config=config_cols, use_container_width=True, hide_index=True)
@@ -327,8 +367,10 @@ if opcion_menu == "👩‍💼 Planilla Quincenal":
         st.markdown("---")
         st.markdown("### 🧮 Vista Previa: Planilla Calculada")
         
+        # --- AQUÍ CORREGIMOS EL PROBLEMA DEL "nan" ---
         df_calc = st.session_state.planilla_quin_df.copy()
-        df_calc = df_calc[df_calc['Empleado'].str.strip() != ""] 
+        df_calc['Empleado'] = df_calc['Empleado'].astype(str).str.strip()
+        df_calc = df_calc[(df_calc['Empleado'] != "") & (df_calc['Empleado'].str.lower() != "nan")] 
         
         df_calc['Sueldo Prop.'] = (df_calc['Sueldo Quincenal'] / 15 * df_calc['Días Laborados']).round(2)
         df_calc['Total Devengado'] = df_calc['Sueldo Prop.'] + df_calc['Comisiones'] + df_calc['Bono 14']
@@ -338,16 +380,24 @@ if opcion_menu == "👩‍💼 Planilla Quincenal":
         st.dataframe(df_calc, use_container_width=True, hide_index=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        col_btn1, col_btn2 = st.columns(2)
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
+        
         with col_btn1:
-            if st.button("📥 Generar Planilla PDF", type="secondary", use_container_width=True):
+            if st.button("📥 Descargar Recibos (Para Firmar)", type="secondary", use_container_width=True):
                 if not df_calc.empty:
-                    pdf_emp = generar_pdf_planilla_empleados(f_inicio_quin, f_fin_quin, df_calc)
-                    st.success("✅ PDF Generado con éxito. Usa el botón de abajo para descargarlo.")
-                    st.download_button("📥 Descargar Archivo PDF", data=pdf_emp, file_name=f"Planilla_Empleados_{f_inicio_quin.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", use_container_width=True)
+                    pdf_recibos = generar_pdf_recibos_quincenales(f_inicio_quin, f_fin_quin, df_calc)
+                    st.download_button("Descargar Recibos PDF", data=pdf_recibos, file_name=f"Boletas_Pago_{f_inicio_quin.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", use_container_width=True)
                 else: st.warning("⚠️ La planilla está vacía.")
+                
         with col_btn2:
-            if st.button("💾 Guardar Planilla Oficialmente", type="primary", use_container_width=True):
+            if st.button("📥 Descargar Tabla General", type="secondary", use_container_width=True):
+                if not df_calc.empty:
+                    pdf_resumen = generar_pdf_planilla_empleados_resumen(f_inicio_quin, f_fin_quin, df_calc)
+                    st.download_button("Descargar Tabla PDF", data=pdf_resumen, file_name=f"Resumen_Planilla_{f_inicio_quin.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", use_container_width=True)
+                else: st.warning("⚠️ La planilla está vacía.")
+                
+        with col_btn3:
+            if st.button("💾 Guardar Oficialmente", type="primary", use_container_width=True):
                 datos_json = st.session_state.planilla_quin_df.to_json(orient='records')
                 total_pagar_quin = float(df_calc['Líquido a Recibir'].sum())
                 try:
@@ -386,103 +436,16 @@ if opcion_menu == "👩‍💼 Planilla Quincenal":
                     st.success("Planilla eliminada definitivamente."); st.rerun()
                 if col_acc3.button("✨ Limpiar Pantalla (Nueva Planilla)", use_container_width=True):
                     st.session_state.quin_id_activa = None; st.session_state.quin_f_inicio = get_fecha_guate().replace(day=1); st.session_state.quin_f_fin = get_fecha_guate().replace(day=15)
-                    st.session_state.planilla_quin_df = pd.DataFrame({"Empleado": empleados_base + [""] * 5, "Sueldo Quincenal": [1675.00, 1475.00, 0.0, 0.0, 1000.00] + [0.0]*6, "Días Laborados": [15.0]*11, "Comisiones": [0.0]*11, "Bono 14": [0.0]*11, "Anticipos": [0.0]*11, "IGSS": [0.0]*11, "Tienda": [0.0]*11})
+                    st.session_state.planilla_quin_df = pd.DataFrame({"Empleado": empleados_base + [""] * 5, "Sueldo Quincenal": [1675.00, 1475.00, 0.0, 0.0, 2000.00] + [0.0]*6, "Días Laborados": [15.0]*11, "Comisiones": [0.0]*11, "Bono 14": [0.0]*11, "Anticipos": [0.0]*11, "IGSS": [0.0]*11, "Tienda": [0.0]*11})
                     st.success("Listo para crear una nueva planilla."); st.rerun()
             else: st.info("Aún no tienes planillas guardadas en el historial.")
         except Exception as e: st.error(f"Esperando a que crees la tabla 'planillas_quincenales' en Neon. Detalle: {e}")
 
 # ------------------------------------------
-# MÓDULO ACTUALIZADO: 👨‍🍳 PLANILLA PANADEROS (CON SEGURO DE EDICIÓN)
-# ------------------------------------------
-elif opcion_menu == "👨‍🍳 Planilla Panaderos":
-    st.title("👨‍🍳 Control de Producción y Recibos")
-    tab_planilla, tab_recibo, tab_historial_recibos = st.tabs(["📝 1. Calcular Planilla (Detalle)", "🧾 2. Emitir Recibo de Pago", "🗄️ 3. Historial de Recibos"])
-    
-    with tab_planilla:
-        col_p1, col_p2, col_p3 = st.columns(3)
-        panadero_nombre = col_p1.selectbox("Nombre del Panadero", ["Jorge", "Otro"])
-        fecha_inicio_plan = col_p2.date_input("Semana del:", get_fecha_guate() - pd.Timedelta(days=6), format="DD/MM/YYYY")
-        fecha_fin_plan = col_p3.date_input("Al:", get_fecha_guate(), format="DD/MM/YYYY")
-        st.markdown("---")
-        productos_base = ["MEXICANA", "CONCHA", "CORONA", "GUANABA", "PAN INDIO", "PAN AZUCARADO", "BESITO", "PITUFO", "GUSANITO", "SAN ANTONIO", "PIRUJO", "TOSTADO REDONDO", "TOSTADO LARGO", "PESCADITO", "HOJITA", "PASTELITO", "CORTADA BLANCA", "CORTADA ROJA", "ROSQUITA", "ROYALITO", "CHURRO", "LENGUA", "CORTADA CANELA", "CORTADA FRESA", "HARINADO OFERTA", "CHAMUCO", "TOSTADO OFERTA", "CUBILETE OFERTA", "CONCHA OFERTA", "MEXICANA OFERTA", "PIQUIADA", "CHAMPU 2 SABORES", "POLVOROSAS", "CHAMPURRADAS", "ROYAL", "PAN ANTONIO", "OTROS"]
-        
-        if 'planilla_df' not in st.session_state:
-            df_base = pd.DataFrame({"Producto": productos_base})
-            for dia in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']: df_base[dia] = 0.00
-            df_base['Libras Pasta'] = 0.00; st.session_state.planilla_df = df_base
-            
-        config_columnas = {"Producto": st.column_config.TextColumn("🍞 Producto", disabled=True)}
-        for d in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo', 'Libras Pasta']: config_columnas[d] = st.column_config.NumberColumn(d, min_value=0.0, format="%.2f")
-        
-        # --- SEGURO DE EDICIÓN: El formulario evita que se borre todo al cambiar de celda ---
-        with st.form("form_edicion_panaderos"):
-            st.info("💡 **Seguro de Edición Activado:** Escribe las Libras con calma. No se borrará nada. Presiona el botón verde de abajo para calcular los totales.")
-            planilla_editada = st.data_editor(st.session_state.planilla_df, hide_index=True, column_config=config_columnas, use_container_width=True, height=600)
-            if st.form_submit_button("✅ Aplicar Cambios y Calcular", type="primary"):
-                st.session_state.planilla_df = planilla_editada
-                st.rerun()
-
-        st.markdown("### 🧮 Subtotal de Producción")
-        col_pago, col_vacio = st.columns([1, 3])
-        precio_quintal = col_pago.number_input("Pago por Quintal (Q)", min_value=0.00, value=135.00, step=5.00)
-        
-        dias_semana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-        total_libras_masa = st.session_state.planilla_df[dias_semana].sum().sum()
-        total_quintales_masa = total_libras_masa / 100
-        total_libras_pasta = st.session_state.planilla_df['Libras Pasta'].sum()
-        total_quintales_pasta = total_libras_pasta / 100
-        gran_total_quintales = total_quintales_masa + total_quintales_pasta
-        pago_total_quincena = gran_total_quintales * precio_quintal
-        
-        c_res1, c_res2, c_res3, c_res4 = st.columns(4)
-        c_res1.metric("⚖️ Libras Masa", f"{total_libras_masa:.2f}", f"{total_quintales_masa:.2f} QQ")
-        c_res2.metric("🧈 Libras Pasta", f"{total_libras_pasta:.2f}", f"{total_quintales_pasta:.2f} QQ")
-        c_res3.metric("📦 Gran Total", f"{gran_total_quintales:.2f} QQ")
-        c_res4.metric("💵 Subtotal Base", f"Q {pago_total_quincena:,.2f}")
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("📥 Descargar Detalle de Planilla PDF", type="secondary"):
-            if gran_total_quintales > 0:
-                pdf_planilla = generar_pdf_planilla_panaderos(panadero_nombre, fecha_inicio_plan, fecha_fin_plan, st.session_state.planilla_df, total_libras_masa, total_quintales_masa, total_libras_pasta, total_quintales_pasta, gran_total_quintales, precio_quintal, pago_total_quincena)
-                st.download_button(label="Descargar Reporte Horizontal", data=pdf_planilla, file_name=f"Detalle_Planilla_{panadero_nombre}_{fecha_fin_plan.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="primary", use_container_width=True)
-            else: st.warning("⚠️ Ingresa libras para generar el reporte.")
-
-    with tab_recibo:
-        st.markdown("### 🧾 Generar Recibo de Pago")
-        col_r1, col_r2 = st.columns(2); numero_recibo = col_r1.text_input("No. de Recibo", value="25"); fecha_emision_recibo = col_r2.date_input("Fecha de Emisión", get_fecha_guate(), format="DD/MM/YYYY")
-        col_e1, col_e2, col_e3 = st.columns(3); septimo_val = col_e1.number_input("➕ Séptimo (Q)", min_value=0.00, value=0.00, step=10.00); tortas_val = col_e2.number_input("➕ Tortas (Q)", min_value=0.00, value=0.00, step=10.00); tienda_val = col_e3.number_input("➖ Deducción Tienda (Q)", min_value=0.00, value=0.00, step=10.00)
-        total_final_pagar = pago_total_quincena + septimo_val + tortas_val - tienda_val
-        st.markdown(f"<h3 style='text-align: center; color: #27AE60;'>Total a Pagar: Q {total_final_pagar:,.2f}</h3>", unsafe_allow_html=True)
-        if st.button("💾 Guardar y Emitir Recibo Oficial", type="primary", use_container_width=True):
-            if total_final_pagar > 0:
-                try:
-                    with conn.session as s:
-                        s.execute(text("INSERT INTO recibos_panaderos (panadero, fecha_inicio, fecha_fin, num_recibo, fecha_emision, gran_total_qq, precio_qq, subtotal, septimo, tortas, tienda, total_pagar) VALUES (:p, :fi, :ff, :nr, :fe, :gqq, :pqq, :sub, :sep, :tor, :tie, :tot)"), {"p": panadero_nombre, "fi": fecha_inicio_plan, "ff": fecha_fin_plan, "nr": numero_recibo, "fe": fecha_emision_recibo, "gqq": gran_total_quintales, "pqq": precio_quintal, "sub": pago_total_quincena, "sep": septimo_val, "tor": tortas_val, "tie": tienda_val, "tot": total_final_pagar}); s.commit()
-                    pdf_recibo = generar_pdf_recibo_panadero(numero_recibo, fecha_emision_recibo, panadero_nombre, fecha_inicio_plan, fecha_fin_plan, gran_total_quintales, precio_quintal, pago_total_quincena, septimo_val, tortas_val, tienda_val, total_final_pagar)
-                    st.success("✅ ¡Recibo guardado en el historial y listo para imprimir!")
-                    st.download_button(label="📥 Descargar Recibo para Firma", data=pdf_recibo, file_name=f"Recibo_Pago_{panadero_nombre}_{numero_recibo}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
-                except Exception as e: st.error(f"⚠️ Error: {e}")
-                
-    with tab_historial_recibos:
-        st.markdown("### 🗄️ Historial de Recibos Emitidos")
-        try:
-            df_recibos = conn.query("SELECT * FROM recibos_panaderos ORDER BY id DESC", ttl=0)
-            if not df_recibos.empty:
-                df_mostrar = df_recibos.copy(); df_mostrar['fecha_emision'] = pd.to_datetime(df_mostrar['fecha_emision']).dt.strftime('%d/%m/%Y')
-                st.dataframe(df_mostrar[['num_recibo', 'panadero', 'fecha_emision', 'gran_total_qq', 'total_pagar']], column_config={"num_recibo": "No. Recibo", "panadero": "Panadero", "fecha_emision": "Emitido El", "gran_total_qq": "Total QQ", "total_pagar": st.column_config.NumberColumn("Total Pagado", format="Q %.2f")}, use_container_width=True, hide_index=True)
-                opciones_recibo = df_recibos.apply(lambda row: f"Recibo {row['num_recibo']} - {row['panadero']} (Q {row['total_pagar']})", axis=1).tolist(); recibo_seleccionado = st.selectbox("Selecciona el recibo que deseas descargar de nuevo:", opciones_recibo)
-                if st.button("📥 Reimprimir este Recibo", type="secondary"):
-                    idx_seleccion = opciones_recibo.index(recibo_seleccionado); datos_recibo = df_recibos.iloc[idx_seleccion]
-                    pdf_reimpresion = generar_pdf_recibo_panadero(datos_recibo['num_recibo'], pd.to_datetime(datos_recibo['fecha_emision']).date(), datos_recibo['panadero'], pd.to_datetime(datos_recibo['fecha_inicio']).date(), pd.to_datetime(datos_recibo['fecha_fin']).date(), datos_recibo['gran_total_qq'], datos_recibo['precio_qq'], datos_recibo['subtotal'], datos_recibo['septimo'], datos_recibo['tortas'], datos_recibo['tienda'], datos_recibo['total_pagar'])
-                    st.download_button(label="Descargar Archivo PDF", data=pdf_reimpresion, file_name=f"Reimpresion_Recibo_{datos_recibo['panadero']}_{datos_recibo['num_recibo']}.pdf", mime="application/pdf", type="primary", use_container_width=True)
-        except Exception as e: st.error(f"⚠️ Error de base de datos: {e}")
-
-# ------------------------------------------
-# (EL RESTO DE MÓDULOS PERMANECEN INTACTOS Y 100% OPERATIVOS)
+# (EL RESTO DE MÓDULOS DE USUARIOS, RUTAS, VENTAS EXTRA, ETC. SIGUEN INTACTOS)
 # ------------------------------------------
 elif opcion_menu == "👥 Usuarios":
     st.title("👥 Gestión de Usuarios")
-    st.write("Administra quién puede entrar al sistema.")
     col1, col2 = st.columns(2)
     with col1:
         with st.expander("➕ Crear Nuevo Usuario"):
@@ -515,19 +478,14 @@ elif opcion_menu == "👥 Usuarios":
 
 elif opcion_menu == "📝 Ventas Extra (Recibos)":
     st.title("📝 Control de Ventas Extra (Ingresos Aparte)")
-    st.write("Registra ventas a clientes específicos e imprime su recibo. Esto sumará a los ingresos en tus estadísticas.")
     tab_crear, tab_hist_ve = st.tabs(["➕ Nueva Venta Extra", "🗄️ Historial de Ventas Extra"])
     with tab_crear:
         col_c1, col_c2 = st.columns(2); fecha_ve = col_c1.date_input("Fecha de Venta", get_fecha_guate(), format="DD/MM/YYYY"); cliente_ve = col_c2.text_input("Cliente / Negocio (Ej. Panadería Santa Lucía)")
         st.markdown("#### 🥖 Detalle de Productos")
         if 've_df' not in st.session_state: st.session_state.ve_df = pd.DataFrame({"Cantidad": [0]*10, "Descripción": [""]*10, "Precio Unitario (Q)": [0.0]*10})
-        
-        # --- SEGURO DE EDICIÓN PARA VENTAS EXTRA ---
         with st.form("form_ventas_extra"):
             ve_edit = st.data_editor(st.session_state.ve_df, column_config={"Cantidad": st.column_config.NumberColumn(min_value=0), "Precio Unitario (Q)": st.column_config.NumberColumn(format="%.2f")}, use_container_width=True, hide_index=True)
-            if st.form_submit_button("✅ Calcular Total"):
-                st.session_state.ve_df = ve_edit; st.rerun()
-                
+            if st.form_submit_button("✅ Calcular Total"): st.session_state.ve_df = ve_edit; st.rerun()
         df_calc_ve = st.session_state.ve_df.copy(); df_calc_ve['Subtotal (Q)'] = df_calc_ve['Cantidad'] * df_calc_ve['Precio Unitario (Q)']; total_ve = df_calc_ve['Subtotal (Q)'].sum()
         st.markdown(f"<h3 style='text-align: right; color: #27AE60;'>Total Venta: Q {total_ve:,.2f}</h3>", unsafe_allow_html=True)
         col_btn1, col_btn2 = st.columns(2)
@@ -537,9 +495,8 @@ elif opcion_menu == "📝 Ventas Extra (Recibos)":
                 try:
                     with conn.session as s: s.execute(text("INSERT INTO ventas_extra (fecha, cliente, detalle_json, total) VALUES (:f, :c, :j, :t)"), {"f": fecha_ve, "c": cliente_ve, "j": df_calc_ve.to_json(orient='records'), "t": total_ve}); s.commit()
                     st.success("✅ Venta extra guardada en la base de datos."); st.session_state.ve_df = pd.DataFrame({"Cantidad": [0]*10, "Descripción": [""]*10, "Precio Unitario (Q)": [0.0]*10})
-                    pdf_ve = generar_pdf_recibo_venta_extra(fecha_ve, cliente_ve, df_calc_ve, total_ve)
-                    st.download_button("📥 Descargar Recibo PDF", data=pdf_ve, file_name=f"Recibo_{cliente_ve}_{fecha_ve.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
-                except Exception as e: st.error(f"Error al guardar. {e}")
+                    pdf_ve = generar_pdf_recibo_venta_extra(fecha_ve, cliente_ve, df_calc_ve, total_ve); st.download_button("📥 Descargar Recibo PDF", data=pdf_ve, file_name=f"Recibo_{cliente_ve}_{fecha_ve.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
+                except Exception as e: st.error(f"Error al guardar. ¿Creaste la tabla 'ventas_extra' en Neon? {e}")
             else: st.warning("Debes ingresar un cliente y al menos un producto con precio.")
     with tab_hist_ve:
         st.markdown("### 🗄️ Historial de Ventas Extra")
@@ -578,8 +535,7 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
         archivo_xml = st.file_uploader("📂 Subir XML de Factura Electrónica (FEL)", type=["xml"])
         if archivo_xml is not None:
             try:
-                xml_str = archivo_xml.getvalue(); root = ET.fromstring(xml_str)
-                fecha_factura = str(get_fecha_guate()); cliente_nombre_sat = "Cliente Generico"; nit_cliente = "CF"
+                xml_str = archivo_xml.getvalue(); root = ET.fromstring(xml_str); fecha_factura = str(get_fecha_guate()); cliente_nombre_sat = "Cliente Generico"; nit_cliente = "CF"
                 for elem in root.iter():
                     tag_name = elem.tag.split('}')[-1]
                     if tag_name == 'DatosGenerales': f_emision = elem.attrib.get('FechaHoraEmision', ''); fecha_factura = f_emision[:10] if f_emision else fecha_factura
@@ -655,12 +611,10 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
                 st.markdown("---"); col_edit, col_del = st.columns(2)
                 with col_edit:
                     st.markdown("#### ✏️ Corregir Sucursal")
-                    opciones_edit = df_rutas_hist.apply(lambda row: f"ID: {row['id']} | Fecha: {pd.to_datetime(row['fecha_factura']).strftime('%d/%m/%Y')} | Sucursal actual: {row.get('sucursal', row['cliente'])}", axis=1).tolist()
-                    ruta_a_editar = st.selectbox("Selecciona la factura:", opciones_edit, key="sel_edit")
+                    opciones_edit = df_rutas_hist.apply(lambda row: f"ID: {row['id']} | Fecha: {pd.to_datetime(row['fecha_factura']).strftime('%d/%m/%Y')} | Sucursal actual: {row.get('sucursal', row['cliente'])}", axis=1).tolist(); ruta_a_editar = st.selectbox("Selecciona la factura:", opciones_edit, key="sel_edit")
                     idx_edit_temp = opciones_edit.index(ruta_a_editar); datos_edit_temp = df_rutas_hist.iloc[idx_edit_temp]
                     es_oasis_edit = ("ORIENTE" in datos_edit_temp['cliente'].upper() or "OASIS" in datos_edit_temp['cliente'].upper() or "QUALY" in datos_edit_temp['cliente'].upper())
-                    if es_oasis_edit: nueva_suc_correcta = st.selectbox("Nueva Sucursal Correcta:", obtener_lista_sucursales())
-                    else: nueva_suc_correcta = st.selectbox("Nueva Sucursal Correcta:", obtener_lista_comunes())
+                    nueva_suc_correcta = st.selectbox("Nueva Sucursal Correcta:", obtener_lista_sucursales() if es_oasis_edit else obtener_lista_comunes())
                     if st.button("💾 Guardar Corrección", type="primary"):
                         idx_edit = opciones_edit.index(ruta_a_editar); datos_edit = df_rutas_hist.iloc[idx_edit]; id_edit = int(datos_edit['id']); f_edit = datos_edit['fecha_factura']; m_edit = float(datos_edit['total_pan']); suc_vieja = datos_edit.get('sucursal', datos_edit['cliente']); cli_nombre_edit = datos_edit['cliente']
                         with conn.session as s:
@@ -670,8 +624,7 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
                         st.success("✅ ¡Sucursal corregida con éxito!"); st.rerun()
                 with col_del:
                     st.markdown("#### 🗑️ Eliminar Factura")
-                    opciones_borrar = df_rutas_hist.apply(lambda row: f"ID: {row['id']} | Fecha: {pd.to_datetime(row['fecha_factura']).strftime('%d/%m/%Y')} | Total: Q {row['gran_total']}", axis=1).tolist()
-                    ruta_a_borrar = st.selectbox("Selecciona para eliminar:", opciones_borrar, key="sel_del")
+                    opciones_borrar = df_rutas_hist.apply(lambda row: f"ID: {row['id']} | Fecha: {pd.to_datetime(row['fecha_factura']).strftime('%d/%m/%Y')} | Total: Q {row['gran_total']}", axis=1).tolist(); ruta_a_borrar = st.selectbox("Selecciona para eliminar:", opciones_borrar, key="sel_del")
                     if st.button("🗑️ Eliminar Definitivamente", type="secondary"):
                         idx_del = opciones_borrar.index(ruta_a_borrar); datos_del = df_rutas_hist.iloc[idx_del]; id_del = int(datos_del['id']); f_del = datos_del['fecha_factura']; m_del = float(datos_del['total_pan']); cli_del = datos_del['cliente']
                         with conn.session as s:
@@ -816,6 +769,39 @@ elif opcion_menu == "📆 Comparativa Diaria":
                     st.download_button(label="📥 Descargar Comparativa en PDF", data=pdf_comparativa, file_name=f"Comparativa_Diaria_{fecha_inicio_comp.strftime('%d-%m-%Y')}_al_{fecha_fin_comp.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
             except Exception as e: st.error(f"Error al cargar la comparativa: {e}")
 
+elif opcion_menu == "🏆 Días Estrella":
+    st.title("🏆 Días Estrella (Rendimiento Semanal)")
+    hoy = get_fecha_guate(); primer_dia_mes = hoy.replace(day=1)
+    col_d1, col_d2 = st.columns(2); fecha_inicio_est = col_d1.date_input("Desde:", primer_dia_mes, format="DD/MM/YYYY", key="fecha_est_1"); fecha_fin_est = col_d2.date_input("Hasta:", hoy, format="DD/MM/YYYY", key="fecha_est_2")
+    if st.button("📊 Analizar Días", type="primary"):
+        with st.spinner("Buscando el mejor día..."):
+            try:
+                q_ing_full = """
+                    SELECT fecha, SUM(monto) as ingresos FROM (
+                        SELECT cd.fecha, (COALESCE(i.venta_total, 0) + COALESCE(i.credito_pagado, 0) + COALESCE(i.transferencias, 0)) as monto FROM cortes_diarios cd LEFT JOIN ingresos i ON cd.id = i.corte_id WHERE cd.fecha BETWEEN :inicio AND :fin
+                        UNION ALL
+                        SELECT fecha, monto FROM cuenta_ruta_jeny WHERE tipo = 'ABONO' AND fecha BETWEEN :inicio AND :fin
+                        UNION ALL
+                        SELECT fecha_factura as fecha, gran_total as monto FROM control_rutas WHERE cliente NOT ILIKE '%ORIENTE%' AND cliente NOT ILIKE '%OASIS%' AND cliente NOT ILIKE '%QUALY%' AND fecha_factura BETWEEN :inicio AND :fin
+                        UNION ALL
+                        SELECT fecha, total as monto FROM ventas_extra WHERE fecha BETWEEN :inicio AND :fin
+                    ) sub GROUP BY fecha
+                """
+                df_ing_dias = conn.query(q_ing_full, params={"inicio": fecha_inicio_est, "fin": fecha_fin_est}, ttl=0)
+                if df_ing_dias.empty or df_ing_dias['ingresos'].sum() == 0: st.warning("No hay ventas registradas en ese rango.")
+                else:
+                    dias_espanol = {'Monday': 'Lunes', 'Tuesday': 'Martes', 'Wednesday': 'Miércoles', 'Thursday': 'Jueves', 'Friday': 'Viernes', 'Saturday': 'Sábado', 'Sunday': 'Domingo'}
+                    df_ing_dias['fecha'] = pd.to_datetime(df_ing_dias['fecha']); df_ing_dias['nombre_dia'] = df_ing_dias['fecha'].dt.day_name().map(dias_espanol)
+                    df_agrupado = df_ing_dias.groupby('nombre_dia', as_index=False)['ingresos'].mean(); df_agrupado = df_agrupado.rename(columns={'ingresos': 'promedio_ventas'})
+                    orden_dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; df_agrupado['nombre_dia'] = pd.Categorical(df_agrupado['nombre_dia'], categories=orden_dias, ordered=True); df_agrupado = df_agrupado.sort_values('nombre_dia')
+                    mejor_dia_nombre = df_agrupado.loc[df_agrupado['promedio_ventas'].idxmax()]['nombre_dia']; peor_dia_nombre = df_agrupado.loc[df_agrupado['promedio_ventas'].idxmin()]['nombre_dia']; promedio_general = df_ing_dias['ingresos'].mean(); dia_record = df_ing_dias.loc[df_ing_dias['ingresos'].idxmax()]
+                    st.markdown("---"); col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("🔥 Mejor Día de la Semana", str(mejor_dia_nombre)); col2.metric("💤 Día más Flojo", str(peor_dia_nombre)); col3.metric("📊 Venta Promedio Diaria", f"Q {promedio_general:,.2f}"); col4.metric("👑 Día Récord (Fecha Exacta)", f"{dia_record['fecha'].strftime('%d/%m/%Y')}", f"Q {dia_record['ingresos']:,.2f}")
+                    fig = px.bar(df_agrupado, x='nombre_dia', y='promedio_ventas', labels={'nombre_dia': 'Día de la Semana', 'promedio_ventas': 'Promedio Vendido (Q)'}, color='promedio_ventas', color_continuous_scale=px.colors.sequential.Viridis); st.plotly_chart(fig, use_container_width=True)
+                    st.dataframe(df_agrupado, column_config={"nombre_dia": "Día de la Semana", "promedio_ventas": st.column_config.NumberColumn("Promedio de Ingresos", format="Q %.2f")}, hide_index=True, use_container_width=True)
+                    pdf_estrellas = generar_pdf_dias_estrella(fecha_inicio_est, fecha_fin_est, df_agrupado, mejor_dia_nombre, peor_dia_nombre, promedio_general, dia_record); st.download_button(label="📥 Descargar Análisis en PDF", data=pdf_estrellas, file_name=f"Dias_Estrella_{fecha_inicio_est.strftime('%d-%m-%Y')}_al_{fecha_fin_est.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
+            except Exception as e: st.error(f"Error al cargar el análisis: {e}")
+
 elif opcion_menu == "💳 Proveedores":
     st.title("💳 Control de Créditos y Proveedores")
     try:
@@ -862,6 +848,78 @@ elif opcion_menu == "💳 Proveedores":
                 deudas_activas.insert(0, 'Estado', deudas_activas['vencimiento'].apply(asignar_semaforo))
                 st.dataframe(deudas_activas, column_config={"vencimiento": st.column_config.DateColumn("Vencimiento", format="DD/MM/YYYY"), "saldo": st.column_config.NumberColumn("Saldo Pendiente", format="Q %.2f")}, use_container_width=True, hide_index=True)
     except Exception as e: st.error(f"Error: {e}")
+
+elif opcion_menu == "👨‍🍳 Planilla Panaderos":
+    st.title("👨‍🍳 Control de Producción y Recibos")
+    tab_planilla, tab_recibo, tab_historial_recibos = st.tabs(["📝 1. Calcular Planilla (Detalle)", "🧾 2. Emitir Recibo de Pago", "🗄️ 3. Historial de Recibos"])
+    with tab_planilla:
+        col_p1, col_p2, col_p3 = st.columns(3); panadero_nombre = col_p1.selectbox("Nombre del Panadero", ["Jorge", "Otro"]); fecha_inicio_plan = col_p2.date_input("Semana del:", get_fecha_guate() - pd.Timedelta(days=6), format="DD/MM/YYYY"); fecha_fin_plan = col_p3.date_input("Al:", get_fecha_guate(), format="DD/MM/YYYY")
+        st.markdown("---")
+        productos_base = ["MEXICANA", "CONCHA", "CORONA", "GUANABA", "PAN INDIO", "PAN AZUCARADO", "BESITO", "PITUFO", "GUSANITO", "SAN ANTONIO", "PIRUJO", "TOSTADO REDONDO", "TOSTADO LARGO", "PESCADITO", "HOJITA", "PASTELITO", "CORTADA BLANCA", "CORTADA ROJA", "ROSQUITA", "ROYALITO", "CHURRO", "LENGUA", "CORTADA CANELA", "CORTADA FRESA", "HARINADO OFERTA", "CHAMUCO", "TOSTADO OFERTA", "CUBILETE OFERTA", "CONCHA OFERTA", "MEXICANA OFERTA", "PIQUIADA", "CHAMPU 2 SABORES", "POLVOROSAS", "CHAMPURRADAS", "ROYAL", "PAN ANTONIO", "OTROS"]
+        if 'planilla_pan_df' not in st.session_state:
+            df_base = pd.DataFrame({"Producto": productos_base})
+            for dia in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']: df_base[dia] = 0.00
+            df_base['Libras Pasta'] = 0.00; st.session_state.planilla_pan_df = df_base
+            
+        st.markdown("### 💾 Guardado de Seguridad")
+        col_b1, col_b2 = st.columns(2)
+        if col_b1.button("Guardar Avance (Borrador)", use_container_width=True):
+            try:
+                with conn.session as s: s.execute(text("INSERT INTO borrador_planilla (id, datos) VALUES (1, :d) ON CONFLICT (id) DO UPDATE SET datos = :d"), {"d": st.session_state.planilla_pan_df.to_json(orient='records')}); s.commit()
+                st.success("¡Avance guardado a salvo en la base de datos!")
+            except Exception as e: st.error("⚠️ Falta crear la tabla borrador_planilla.")
+        if col_b2.button("Recuperar Avance Guardado", use_container_width=True):
+            try:
+                with conn.session as s:
+                    resultado = s.execute(text("SELECT datos FROM borrador_planilla WHERE id = 1")).fetchone()
+                    if resultado and resultado[0]: st.session_state.planilla_pan_df = pd.read_json(io.StringIO(resultado[0]), orient='records'); st.success("Avance recuperado con éxito."); st.rerun()
+            except Exception as e: st.error("⚠️ Falta crear la tabla borrador_planilla.")
+            
+        config_columnas = {"Producto": st.column_config.TextColumn("🍞 Producto", disabled=True)}
+        for d in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo', 'Libras Pasta']: config_columnas[d] = st.column_config.NumberColumn(d, min_value=0.0, format="%.2f")
+        
+        with st.form("form_edicion_panaderos"):
+            st.info("💡 **Seguro de Edición Activado:** Escribe las Libras con calma. No se borrará nada. Presiona el botón verde de abajo para calcular los totales.")
+            planilla_editada = st.data_editor(st.session_state.planilla_pan_df, hide_index=True, column_config=config_columnas, use_container_width=True, height=600)
+            if st.form_submit_button("✅ Aplicar Cambios y Calcular", type="primary"):
+                st.session_state.planilla_pan_df = planilla_editada; st.rerun()
+                
+        st.markdown("### 🧮 Subtotal de Producción")
+        col_pago, col_vacio = st.columns([1, 3]); precio_quintal = col_pago.number_input("Pago por Quintal (Q)", min_value=0.00, value=135.00, step=5.00)
+        dias_semana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']; total_libras_masa = st.session_state.planilla_pan_df[dias_semana].sum().sum(); total_quintales_masa = total_libras_masa / 100; total_libras_pasta = st.session_state.planilla_pan_df['Libras Pasta'].sum(); total_quintales_pasta = total_libras_pasta / 100; gran_total_quintales = total_quintales_masa + total_quintales_pasta; pago_total_quincena = gran_total_quintales * precio_quintal
+        c_res1, c_res2, c_res3, c_res4 = st.columns(4); c_res1.metric("⚖️ Libras Masa", f"{total_libras_masa:.2f}", f"{total_quintales_masa:.2f} QQ"); c_res2.metric("🧈 Libras Pasta", f"{total_libras_pasta:.2f}", f"{total_quintales_pasta:.2f} QQ"); c_res3.metric("📦 Gran Total", f"{gran_total_quintales:.2f} QQ"); c_res4.metric("💵 Subtotal Base", f"Q {pago_total_quincena:,.2f}")
+        if st.button("📥 Descargar Detalle de Planilla PDF", type="secondary"):
+            if gran_total_quintales > 0:
+                pdf_planilla = generar_pdf_planilla_panaderos(panadero_nombre, fecha_inicio_plan, fecha_fin_plan, st.session_state.planilla_pan_df, total_libras_masa, total_quintales_masa, total_libras_pasta, total_quintales_pasta, gran_total_quintales, precio_quintal, pago_total_quincena)
+                st.download_button(label="Descargar Reporte Horizontal", data=pdf_planilla, file_name=f"Detalle_Planilla_{panadero_nombre}_{fecha_fin_plan.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="primary", use_container_width=True)
+            else: st.warning("⚠️ Ingresa libras para generar el reporte.")
+    with tab_recibo:
+        st.markdown("### 🧾 Generar Recibo de Pago")
+        col_r1, col_r2 = st.columns(2); numero_recibo = col_r1.text_input("No. de Recibo", value="25"); fecha_emision_recibo = col_r2.date_input("Fecha de Emisión", get_fecha_guate(), format="DD/MM/YYYY")
+        col_e1, col_e2, col_e3 = st.columns(3); septimo_val = col_e1.number_input("➕ Séptimo (Q)", min_value=0.00, value=0.00, step=10.00); tortas_val = col_e2.number_input("➕ Tortas (Q)", min_value=0.00, value=0.00, step=10.00); tienda_val = col_e3.number_input("➖ Deducción Tienda (Q)", min_value=0.00, value=0.00, step=10.00)
+        total_final_pagar = pago_total_quincena + septimo_val + tortas_val - tienda_val; st.markdown(f"<h3 style='text-align: center; color: #27AE60;'>Total a Pagar: Q {total_final_pagar:,.2f}</h3>", unsafe_allow_html=True)
+        if st.button("💾 Guardar y Emitir Recibo Oficial", type="primary", use_container_width=True):
+            if total_final_pagar > 0:
+                try:
+                    with conn.session as s:
+                        s.execute(text("INSERT INTO recibos_panaderos (panadero, fecha_inicio, fecha_fin, num_recibo, fecha_emision, gran_total_qq, precio_qq, subtotal, septimo, tortas, tienda, total_pagar) VALUES (:p, :fi, :ff, :nr, :fe, :gqq, :pqq, :sub, :sep, :tor, :tie, :tot)"), {"p": panadero_nombre, "fi": fecha_inicio_plan, "ff": fecha_fin_plan, "nr": numero_recibo, "fe": fecha_emision_recibo, "gqq": gran_total_quintales, "pqq": precio_quintal, "sub": pago_total_quincena, "sep": septimo_val, "tor": tortas_val, "tie": tienda_val, "tot": total_final_pagar}); s.commit()
+                    pdf_recibo = generar_pdf_recibo_panadero(numero_recibo, fecha_emision_recibo, panadero_nombre, fecha_inicio_plan, fecha_fin_plan, gran_total_quintales, precio_quintal, pago_total_quincena, septimo_val, tortas_val, tienda_val, total_final_pagar)
+                    st.success("✅ ¡Recibo guardado en el historial y listo para imprimir!")
+                    st.download_button(label="📥 Descargar Recibo para Firma", data=pdf_recibo, file_name=f"Recibo_Pago_{panadero_nombre}_{numero_recibo}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
+                except Exception as e: st.error(f"⚠️ Error: {e}")
+    with tab_historial_recibos:
+        st.markdown("### 🗄️ Historial de Recibos Emitidos")
+        try:
+            df_recibos = conn.query("SELECT * FROM recibos_panaderos ORDER BY id DESC", ttl=0)
+            if not df_recibos.empty:
+                df_mostrar = df_recibos.copy(); df_mostrar['fecha_emision'] = pd.to_datetime(df_mostrar['fecha_emision']).dt.strftime('%d/%m/%Y')
+                st.dataframe(df_mostrar[['num_recibo', 'panadero', 'fecha_emision', 'gran_total_qq', 'total_pagar']], column_config={"num_recibo": "No. Recibo", "panadero": "Panadero", "fecha_emision": "Emitido El", "gran_total_qq": "Total QQ", "total_pagar": st.column_config.NumberColumn("Total Pagado", format="Q %.2f")}, use_container_width=True, hide_index=True)
+                opciones_recibo = df_recibos.apply(lambda row: f"Recibo {row['num_recibo']} - {row['panadero']} (Q {row['total_pagar']})", axis=1).tolist(); recibo_seleccionado = st.selectbox("Selecciona el recibo que deseas descargar de nuevo:", opciones_recibo)
+                if st.button("📥 Reimprimir este Recibo", type="secondary"):
+                    idx_seleccion = opciones_recibo.index(recibo_seleccionado); datos_recibo = df_recibos.iloc[idx_seleccion]
+                    pdf_reimpresion = generar_pdf_recibo_panadero(datos_recibo['num_recibo'], pd.to_datetime(datos_recibo['fecha_emision']).date(), datos_recibo['panadero'], pd.to_datetime(datos_recibo['fecha_inicio']).date(), pd.to_datetime(datos_recibo['fecha_fin']).date(), datos_recibo['gran_total_qq'], datos_recibo['precio_qq'], datos_recibo['subtotal'], datos_recibo['septimo'], datos_recibo['tortas'], datos_recibo['tienda'], datos_recibo['total_pagar'])
+                    st.download_button(label="Descargar Archivo PDF", data=pdf_reimpresion, file_name=f"Reimpresion_Recibo_{datos_recibo['panadero']}_{datos_recibo['num_recibo']}.pdf", mime="application/pdf", type="primary", use_container_width=True)
+        except Exception as e: st.error(f"⚠️ Error de base de datos: {e}")
 
 elif opcion_menu == "📊 Reporte PDF Mensual":
     st.title("📊 Generador de Reporte Financiero (PDF)")
