@@ -125,10 +125,10 @@ def autocompletar_categoria(d):
     if re.search(r'\b(resma|hoja|hojas|lapicero|cuaderno|libreta|marcador|clip|grapa|impresion|tinta|toner|papel bond|folder|papeleria)\b', d): return 'UTILES DE OFICINA'
     if re.search(r'\b(sellador|bolsa|bolsas|bandeja|calcomania|etiqueta|nylon|plastico|vaso|plato|desechable|domo|tapadera|tape|cinta|pita|rollo|caja|carton)\b', d): return 'EMPAQUES Y DESECHABLES'
     if re.search(r'\b(escoba|jabon|cloro|desinfectante|trapeador|esponja|basurero|papel higienico|servilleta|aromatizante|fabuloso|rinso|magia|detergente|cepillo|limpia vidrio)\b', d): return 'PRODUCTOS DE LIMPIEZA'
-    if re.search(r'\b(harina|azucar|azúcar|manteca|levadura|leche|huevo|huevos|sal|esencia|colorante|polvo|margarina|aceite|vainilla|canela|chocolate|cocoa|jalea|manjar|queso|crema|ajonjoli|mermelada|pasa|maicena|royal|bicarbonato|premezcla|chantilly|fondant|cobertura|mayonesa|consome|mostaza|verdura|apio|cebolla|chile)\b', d): return 'MATERIA PRIMA'
+    if re.search(r'\b(harina|azucar|azúcar|manteca|levadura|leche|huevo|huevos|sal|esencia|colorante|polvo|margarina|aceite|vainilla|canela|chocolate|cocoa|jalea|manjar|queso|crema|ajonjoli|mermelada|pasa|maicena|royal|bicarbonato|premezcla|chantilly|fondant|cobertura|mayonesa|consome|mostaza|verdura|apio|cebolla|chile|hermanos portillo|portillo)\b', d): return 'MATERIA PRIMA'
     if re.search(r'\b(compra pasta|compras pasta|compra pollo|compras pollo|pasta de pollo)\b', d): return 'COMPRAS DE PASTA DE POLLO'
     if re.search(r'\b(bolsa de agua|agua pura|gaseosa|coca|bebida|tostada|marquesote|jugo|tampico|gatorade|botella|galleta|helado|ricito|dorito|golosina|toti|dulce|chicle|salvavidas|garrafon|frijol|tortilla)\b', d): return 'OTRAS MERCADERIAS'
-    if re.search(r'\b(bono|sueldo|salario|anticipo|almuerzo|planilla|turno|quincena|panadero|pago a|wendy|dania|jorge|roberto|pasaje|comision|igss|viatico|colaboradora|prestacion|honorario|profesional|portillo)\b', d): return 'SUELDOS Y SALARIOS'
+    if re.search(r'\b(bono|sueldo|salario|anticipo|almuerzo|planilla|turno|quincena|panadero|pago a|wendy|dania|jorge|roberto|pasaje|comision|igss|viatico|colaboradora|prestacion|honorario|profesional)\b', d): return 'SUELDOS Y SALARIOS'
     if re.search(r'\b(gasolina|combustible|moto|vehiculo|repuesto|llanta|aceite motor|mecanico|pinchazo|bateria|freno|pastilla|servicio moto|carwash|lavado|bujia|cadena|candela)\b', d): return 'REPUESTOS Y REPARACIONES'
     if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota|visacuota|credito|banrural|industrial|ficohsa|bam|micoope|cooperativa|coosajo|bantrab|cmj|genesis|mami)\b', d): return 'PRESTAMOS E INTERESES'
     if re.search(r'\b(impuesto|sat|contador|patente|boleto de ornato|multa|isr|iva|declaracion|tramite|abogado|notario)\b', d): return 'IMPUESTOS Y LEGALES'
@@ -150,6 +150,7 @@ def add_pdf_header(elements, title_text, subtitle_text=""):
     elements.append(Paragraph(title_text, title_style))
     if subtitle_text: elements.append(Paragraph(subtitle_text, sub_style))
 
+# -- GENERADORES PDF --
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_efectivo, pago_pedidos, transferencias):
     buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []
     add_pdf_header(elements, "PANADERÍA Y REPOSTERÍA JUDITH", "INTEGRACIÓN DE INGRESOS Y EGRESOS - CORTE DE CAJA")
@@ -170,8 +171,10 @@ def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_ef
 def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gastos_det_df, v_abonos_jeny, v_otras_rutas, v_ventas_extra):
     buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []
     add_pdf_header(elements, "PANADERÍA Y REPOSTERÍA JUDITH", f"REPORTE GERENCIAL DE RESULTADOS: {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}")
+    
     v_efectivo = ingresos_df['efectivo'].sum() if not ingresos_df.empty else 0; v_pedidos_trans = (ingresos_df['pedidos'].sum() + ingresos_df['transferencias'].sum()) if not ingresos_df.empty else 0
     t_ingresos = v_efectivo + v_pedidos_trans + v_abonos_jeny + v_otras_rutas + v_ventas_extra; t_gastos = gastos_cat_df['total'].sum() if not gastos_cat_df.empty else 0; utilidad = t_ingresos - t_gastos
+    
     resumen_data = [
         ["RESUMEN DE INGRESOS", "MONTO (Q)", "RESUMEN DE EGRESOS Y UTILIDAD", "MONTO (Q)"],
         ["Ventas Mostrador (Efectivo)", f"Q {v_efectivo:,.2f}", "Total Gastos Generales", f"Q {t_gastos:,.2f}"],
@@ -182,11 +185,35 @@ def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gas
         ["TOTAL INGRESOS", f"Q {t_ingresos:,.2f}", "", ""]
     ]
     t_resumen = Table(resumen_data, colWidths=[140, 90, 190, 100]); t_resumen.setStyle(TableStyle([('BACKGROUND', (0,0), (1,0), colors.HexColor("#27AE60")), ('BACKGROUND', (2,0), (3,0), colors.HexColor("#E74C3C")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('ALIGN', (1,0), (1,-1), 'RIGHT'), ('ALIGN', (3,0), (3,-1), 'RIGHT'), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('BACKGROUND', (0,-1), (1,-1), colors.HexColor("#D4EFDF")), ('FONTNAME', (0,-1), (1,-1), 'Helvetica-Bold'), ('BACKGROUND', (2,3), (3,3), colors.HexColor("#FADBD8")), ('FONTNAME', (2,3), (3,3), 'Helvetica-Bold')])); elements.append(t_resumen); elements.append(Spacer(1, 20))
+    
     if not gastos_cat_df.empty and t_gastos > 0:
         h2_style = ParagraphStyle('H2', fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
-        elements.append(Paragraph("<b>Distribución de Gastos por Categoría</b>", h2_style)); d = Drawing(400, 160); pc = Pie(); pc.x = 20; pc.y = 10; pc.width = 140; pc.height = 140; pc.data = gastos_cat_df['total'].tolist(); pc.labels = [f"{row['categoria']} ({(row['total']/t_gastos)*100:.1f}%)" for _, row in gastos_cat_df.iterrows()]; pc.sideLabels = 1; colores_hex = ["#3498DB", "#E74C3C", "#2ECC71", "#F1C40F", "#9B59B6", "#E67E22", "#1ABC9C", "#34495E", "#95A5A6"]
-        for i in range(len(pc.data)): pc.slices[i].fillColor = colors.HexColor(colores_hex[i % len(colores_hex)]); pc.slices[i].strokeColor = colors.white
-        d.add(pc); elements.append(d); elements.append(Spacer(1, 10))
+        elements.append(Paragraph("<b>Distribución de Gastos por Categoría</b>", h2_style))
+        
+        # --- SOLUCIÓN DEL PASTEL AMONTONADO ---
+        d = Drawing(480, 160)
+        pc = Pie()
+        pc.x = 20; pc.y = 10; pc.width = 140; pc.height = 140
+        pc.data = gastos_cat_df['total'].tolist()
+        pc.labels = [''] * len(pc.data) # Esto oculta las etiquetas amontonadas sobre el gráfico
+        
+        colores_hex = ["#3498DB", "#E74C3C", "#2ECC71", "#F1C40F", "#9B59B6", "#E67E22", "#1ABC9C", "#34495E", "#95A5A6", "#D35400", "#7F8C8D", "#C0392B"]
+        for i in range(len(pc.data)): 
+            pc.slices[i].fillColor = colors.HexColor(colores_hex[i % len(colores_hex)])
+            pc.slices[i].strokeColor = colors.white
+            
+        # Agregamos una leyenda ordenada al lado
+        leg = Legend()
+        leg.x = 200; leg.y = 140; leg.dy = 12; leg.dx = 10
+        leg.fontName = 'Helvetica'
+        leg.fontSize = 9
+        leg.boxAnchor = 'nw'
+        leg.columnMaximum = 10
+        leg.colorNamePairs = [(colors.HexColor(colores_hex[i % len(colores_hex)]), f"{gastos_cat_df.iloc[i]['categoria']} ({(gastos_cat_df.iloc[i]['total']/t_gastos)*100:.1f}%)") for i in range(len(pc.data))]
+        
+        d.add(pc); d.add(leg)
+        elements.append(d); elements.append(Spacer(1, 10))
+        
     gastos_data = [["CATEGORÍA DE GASTO", "MONTO GASTADO", "PORCENTAJE"]]
     for index, row in gastos_cat_df.iterrows(): pct = (row['total'] / t_gastos) * 100 if t_gastos > 0 else 0; gastos_data.append([str(row["categoria"]), f"Q {row['total']:,.2f}", f"{pct:.1f}%"])
     t_cat = Table(gastos_data, colWidths=[250, 150, 120]); t_cat.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#34495E")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('ALIGN', (1,0), (-1,-1), 'RIGHT'), ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey)])); elements.append(t_cat); elements.append(Spacer(1, 25))
@@ -262,19 +289,7 @@ def generar_pdf_planilla_empleados_resumen(f_inicio, f_fin, df_calc):
     ]
     sum_sueldo = 0; sum_total_prop = 0; sum_comis = 0; sum_dev = 0; sum_ant = 0; sum_igss = 0; sum_tienda = 0; sum_desc = 0; sum_liq = 0
     for i, row in df_calc.iterrows():
-        data.append([
-            str(i+1), str(row['Empleado']), 
-            f"{row['Sueldo Quincenal']:.2f}" if row['Sueldo Quincenal'] else "-", 
-            f"{row['Días Laborados']:.2f}", 
-            f"{row['Sueldo Prop.']:.2f}", 
-            f"{row['Comisiones']:.2f}" if row['Comisiones'] else "-", 
-            f"{row['Total Devengado']:.2f}", 
-            f"{row['Anticipos']:.2f}" if row['Anticipos'] else "-", 
-            f"{row['IGSS']:.2f}" if row['IGSS'] else "-", 
-            f"{row['Tienda']:.2f}" if row['Tienda'] else "-", 
-            f"{row['Total Descuentos']:.2f}" if row['Total Descuentos'] else "-", 
-            f"{row['Líquido a Recibir']:.2f}"
-        ])
+        data.append([str(i+1), str(row['Empleado']), f"{row['Sueldo Quincenal']:.2f}", f"{row['Días Laborados']:.2f}", f"{row['Sueldo Prop.']:.2f}", f"{row['Comisiones']:.2f}", f"{row['Total Devengado']:.2f}", f"{row['Anticipos']:.2f}", f"{row['IGSS']:.2f}", f"{row['Tienda']:.2f}", f"{row['Total Descuentos']:.2f}", f"{row['Líquido a Recibir']:.2f}"])
         sum_sueldo += row['Sueldo Quincenal']; sum_total_prop += row['Sueldo Prop.']; sum_comis += row['Comisiones']; sum_dev += row['Total Devengado']; sum_ant += row['Anticipos']; sum_igss += row['IGSS']; sum_tienda += row['Tienda']; sum_desc += row['Total Descuentos']; sum_liq += row['Líquido a Recibir']
     data.append(["", "TOTALES", f"{sum_sueldo:.2f}", "", f"{sum_total_prop:.2f}", f"{sum_comis:.2f}", f"{sum_dev:.2f}", f"{sum_ant:.2f}", f"{sum_igss:.2f}", f"{sum_tienda:.2f}", f"{sum_desc:.2f}", f"{sum_liq:.2f}"])
     t = Table(data, colWidths=[25, 140, 65, 45, 55, 75, 75, 55, 50, 50, 75, 75])
@@ -685,10 +700,13 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
         if archivo_xml is not None:
             try:
                 xml_str = archivo_xml.getvalue().decode('utf-8', errors='ignore')
+                
                 f_emision_m = re.search(r'FechaHoraEmision="([^"]+)"', xml_str)
                 fecha_factura = f_emision_m.group(1)[:10] if f_emision_m else str(get_fecha_guate())
+                
                 cliente_m = re.search(r'NombreReceptor="([^"]+)"', xml_str)
                 cliente_nombre_sat = cliente_m.group(1) if cliente_m else "Cliente Generico"
+                
                 nit_m = re.search(r'IDReceptor="([^"]+)"', xml_str)
                 nit_cliente = nit_m.group(1) if nit_m else "CF"
                 
@@ -704,6 +722,7 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
                     forzar_contado = st.checkbox("✅ Forzar como Venta al Contado (No sumar a la cuenta de Jeny)")
                 
                 es_oasis_final = es_oasis_detectado and not forzar_contado
+                
                 col_suc1, col_suc2 = st.columns(2)
                 if es_oasis_final:
                     sucursal_seleccionada = col_suc1.selectbox("Selecciona la Sucursal de Oasis:", obtener_lista_sucursales())
@@ -735,6 +754,7 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
                 if not df_xml.empty:
                     df_pan = df_xml[df_xml['Categoría'] == 'Pan / Repostería']
                     df_pasta = df_xml[df_xml['Categoría'] == 'Pasta / Salado']
+                    
                     tot_pan = float(df_pan['Total (Q)'].sum()) if not df_pan.empty else 0.0
                     tot_pasta = float(df_pasta['Total (Q)'].sum()) if not df_pasta.empty else 0.0
                     gran_total = float(df_xml['Total (Q)'].sum()) if not df_xml.empty else 0.0
@@ -788,7 +808,7 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
                         if monto_abono > 0:
                             with conn.session as s: s.execute(text("INSERT INTO cuenta_ruta_jeny (fecha, tipo, monto, detalle) VALUES (:f, 'ABONO', :m, :d)"), {"f": fecha_abono, "m": monto_abono, "d": detalle_abono}); s.commit()
                             st.success("✅ ¡Abono guardado!"); st.rerun()
-                        else: st.warning("El monto debe ser mayor a cero.")
+                        else: st.warning("El monto internal debe ser mayor a cero.")
             st.markdown("#### 📜 Movimientos de la Cuenta")
             if not df_cuenta.empty:
                 df_mostrar_cta = df_cuenta.copy(); df_mostrar_cta['fecha'] = pd.to_datetime(df_mostrar_cta['fecha']).dt.strftime('%d/%m/%Y'); st.dataframe(df_mostrar_cta[['fecha', 'detalle', 'tipo', 'monto']], column_config={"fecha": "Fecha", "detalle": "Concepto / Sucursal", "tipo": "Tipo", "monto": st.column_config.NumberColumn("Monto (Q)", format="Q %.2f")}, hide_index=True, use_container_width=True)
@@ -902,7 +922,7 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
             except: pass
 
 # ------------------------------------------
-# MÓDULO 7: VENTAS EXTRA (RECIBOS)
+# MÓDULOS DE VENTAS EXTRA, PROVEEDORES, PLANILLAS PANADEROS Y PLANILLA EMPLEADOS
 # ------------------------------------------
 elif opcion_menu == "📝 Ventas Extra (Recibos)":
     st.title("📝 Control de Ventas Extra (Ingresos Aparte)")
@@ -944,9 +964,6 @@ elif opcion_menu == "📝 Ventas Extra (Recibos)":
             else: st.info("No hay ventas registradas.")
         except Exception: st.error("Error al cargar historial.")
 
-# ------------------------------------------
-# MÓDULO 8: PROVEEDORES
-# ------------------------------------------
 elif opcion_menu == "💳 Proveedores":
     st.title("💳 Control de Créditos y Proveedores")
     try:
@@ -1011,9 +1028,6 @@ elif opcion_menu == "💳 Proveedores":
             else: st.info("Aún no tienes deudas pagadas en el historial.")
     except Exception as e: st.error(f"Error: {e}")
 
-# ------------------------------------------
-# MÓDULO 9: PLANILLA PANADEROS
-# ------------------------------------------
 elif opcion_menu == "👨‍🍳 Planilla Panaderos":
     st.title("👨‍🍳 Control de Producción y Recibos")
     tab_planilla, tab_recibo, tab_historial_recibos = st.tabs(["📝 1. Calcular Planilla (Detalle)", "🧾 2. Emitir Recibo de Pago", "🗄️ 3. Historial de Recibos"])
@@ -1079,9 +1093,6 @@ elif opcion_menu == "👨‍🍳 Planilla Panaderos":
                     st.download_button(label="Descargar Archivo PDF", data=pdf_reimpresion, file_name=f"Reimpresion_Recibo_{datos_recibo['panadero']}_{datos_recibo['num_recibo']}.pdf", mime="application/pdf", type="primary", use_container_width=True)
         except Exception as e: st.error(f"⚠️ Error de base de datos: {e}")
 
-# ------------------------------------------
-# MÓDULO 10: 👩‍💼 PLANILLA QUINCENAL
-# ------------------------------------------
 elif opcion_menu == "👩‍💼 Planilla Quincenal":
     st.title("👩‍💼 Control de Planilla Quincenal (Empleados)")
     st.write("Calcula los sueldos y genera recibos individuales para firmar sin usar Excel.")
@@ -1164,7 +1175,7 @@ elif opcion_menu == "👩‍💼 Planilla Quincenal":
         except Exception as e: st.error(f"Esperando a que crees la tabla 'planillas_quincenales' en Neon. Detalle: {e}")
 
 # ------------------------------------------
-# MÓDULO 11: REPORTE PDF MENSUAL
+# MÓDULO 11: REPORTE PDF MENSUAL CON LEYENDA (CORREGIDO)
 # ------------------------------------------
 elif opcion_menu == "📊 Reporte PDF Mensual":
     st.title("📊 Generador de Reporte Financiero (PDF)")
