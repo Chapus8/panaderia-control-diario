@@ -106,7 +106,7 @@ if not st.session_state['logueado']:
     st.stop()
 
 # ==========================================
-# 3. FUNCIONES COMPARTIDAS (CEREBRO CLASIFICADOR)
+# 3. CEREBRO CLASIFICADOR Y PDF
 # ==========================================
 def obtener_o_crear_corte(fecha_corte):
     with conn.session as s:
@@ -117,49 +117,24 @@ def obtener_o_crear_corte(fecha_corte):
             return s.execute(text("SELECT id FROM cortes_diarios WHERE fecha = :fecha"), {"fecha": fecha_corte}).fetchone()[0]
 
 def autocompletar_categoria(d):
-    """Cerebro mejorado para auto-clasificar gastos según las palabras clave."""
+    """Cerebro Clasificador Ultra Detallado entrenado con los datos de Panadería Judith"""
     d = str(d).lower()
     
-    # 1. Alquileres
-    if re.search(r'\b(alquiler|arrendamiento|local|mensualidad local|renta)\b', d): return 'ALQUILERES'
+    if re.search(r'\b(alquiler|arrendamiento|local|mensualidad|renta|parqueo|bodega)\b', d): return 'ALQUILERES'
+    if re.search(r'\b(luz|agua|telefono|internet|basura|celular|energuate|claro|tigo|cable|recarga|eegsa|municipalidad|saldo|alarma|seguridad)\b', d): return 'PAGO DE SERVICIOS'
+    if re.search(r'\b(resma|hoja|hojas|lapicero|cuaderno|libreta|marcador|clip|grapa|impresion|tinta|toner|papel bond|folder|papeleria)\b', d): return 'UTILES DE OFICINA'
+    if re.search(r'\b(sellador|bolsa|bolsas|bandeja|calcomania|etiqueta|nylon|plastico|vaso|plato|desechable|domo|tapadera|tape|cinta|pita|rollo|caja|carton)\b', d): return 'EMPAQUES Y DESECHABLES'
+    if re.search(r'\b(escoba|jabon|cloro|desinfectante|trapeador|esponja|basurero|papel higienico|servilleta|aromatizante|fabuloso|rinso|magia|detergente|cepillo|limpia vidrio)\b', d): return 'PRODUCTOS DE LIMPIEZA'
+    if re.search(r'\b(harina|azucar|azúcar|manteca|levadura|leche|huevo|huevos|sal|esencia|colorante|polvo|margarina|aceite|vainilla|canela|chocolate|cocoa|jalea|manjar|queso|crema|ajonjoli|mermelada|pasa|maicena|royal|bicarbonato|premezcla|chantilly|fondant|cobertura|mayonesa|consome|mostaza|verdura|apio|cebolla|chile)\b', d): return 'MATERIA PRIMA'
+    if re.search(r'\b(compra pasta|compras pasta|compra pollo|compras pollo|pasta de pollo)\b', d): return 'COMPRAS DE PASTA DE POLLO'
+    if re.search(r'\b(bolsa de agua|agua pura|gaseosa|coca|bebida|tostada|marquesote|jugo|tampico|gatorade|botella|galleta|helado|ricito|dorito|golosina|toti|dulce|chicle|salvavidas|garrafon|frijol|tortilla)\b', d): return 'OTRAS MERCADERIAS'
+    if re.search(r'\b(bono|sueldo|salario|anticipo|almuerzo|planilla|turno|quincena|panadero|pago a|wendy|dania|jorge|roberto|pasaje|comision|igss|viatico|colaboradora|prestacion|honorario|profesional|portillo)\b', d): return 'SUELDOS Y SALARIOS'
+    if re.search(r'\b(gasolina|combustible|moto|vehiculo|repuesto|llanta|aceite motor|mecanico|pinchazo|bateria|freno|pastilla|servicio moto|carwash|lavado|bujia|cadena|candela)\b', d): return 'REPUESTOS Y REPARACIONES'
+    if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota|visacuota|credito|banrural|industrial|ficohsa|bam|micoope|cooperativa|coosajo|bantrab|cmj|genesis|mami)\b', d): return 'PRESTAMOS E INTERESES'
+    if re.search(r'\b(impuesto|sat|contador|patente|boleto de ornato|multa|isr|iva|declaracion|tramite|abogado|notario)\b', d): return 'IMPUESTOS Y LEGALES'
+    if re.search(r'\b(gas|propano|cilindro|tambito|horno|batidora|lata|molde|espatula|raspa|cuchillo|rodillo|manga|boquilla|lata de horneo|afilado|plomero|electricista|foco|tubo|cableado|pintura|herramienta|edificio|mobiliario|equipo)\b', d): return 'MANTENIMIENTO Y EQUIPO'
+    if re.search(r'\b(publicidad|anuncio|volante|facebook|radio)\b', d): return 'PUBLICIDAD'
     
-    # 2. Servicios
-    if re.search(r'\b(luz|internet|telefono|basura|agua potable|energuate|claro|tigo|cable|recarga)\b', d): return 'PAGO DE SERVICIOS'
-    
-    # 3. Útiles de Oficina
-    if re.search(r'\b(resma|hoja|hojas|lapicero|lapiceros|cuaderno|libreta|marcador|clip|grapa|impresion|tinta|toner|papel bond|folder)\b', d): return 'UTILES DE OFICINA'
-    
-    # 4. Empaques y Desechables
-    if re.search(r'\b(sellador|bolsa|bolsas|bandeja|calcomania|etiqueta|nylon|plastico|vaso|plato|desechable|domo|tapaderas|tape|cinta|pita|rollo)\b', d): return 'EMPAQUES Y DESECHABLES'
-    
-    # 5. Limpieza
-    if re.search(r'\b(escoba|jabon|cloro|desinfectante|trapeador|esponja|basurero|bolsa de basura|papel higienico|servilleta|aromatizante|fabuloso|rinso|magia blanca)\b', d): return 'PRODUCTOS DE LIMPIEZA'
-    
-    # 6. Materia Prima
-    if re.search(r'\b(harina|azucar|azúcar|manteca|levadura|leche|huevo|huevos|sal|esencia|colorante|polvo para hornear|margarina|aceite|vainilla|canela|chocolate|cocoa|jalea|manjar|queso|crema|ajonjoli)\b', d): return 'MATERIA PRIMA'
-    
-    # 7. Pastas de Pollo
-    if re.search(r'\b(pasta|pollo|pechuga|mayonesa|consome|mostaza|verdura para pasta)\b', d): return 'COMPRAS DE PASTA DE POLLO'
-    
-    # 8. Otras Mercaderías
-    if re.search(r'\b(bolsa de agua|agua pura|gaseosa|coca|bebida|tostada|marquesote|jugo|tampico|gatorade|botella de agua|galletas)\b', d): return 'OTRAS MERCADERIAS'
-    
-    # 9. Sueldos y Salarios
-    if re.search(r'\b(bono|sueldo|sueldos|salario|salarios|anticipo|almuerzo|planilla|turno|quincena|panadero|pago a|wendy|dania|jorge|roberto|pasaje)\b', d): return 'SUELDOS Y SALARIOS'
-    
-    # 10. Vehículos y Repuestos
-    if re.search(r'\b(gasolina|combustible|moto|vehiculo|repuesto|llanta|aceite motor|mecanico|pinchazo|bateria|freno|pastillas|servicio moto|carwash|lavado)\b', d): return 'REPUESTOS Y REPARACIONES'
-    
-    # 11. Préstamos e Intereses
-    if re.search(r'\b(prestamo|tarjeta|interes|abono|banco|cuota|visacuotas|credito)\b', d): return 'PRESTAMOS E INTERESES'
-    
-    # 12. Impuestos y Legales
-    if re.search(r'\b(impuesto|sat|contador|honorario|patente|boleto de ornato|multa)\b', d): return 'IMPUESTOS Y LEGALES'
-    
-    # 13. Mantenimiento de equipo / Panadería
-    if re.search(r'\b(gas|propano|cilindro|tambito|reparacion horno|mantenimiento batidora|lata|molde|cepillo|espátula)\b', d): return 'MANTENIMIENTO Y EQUIPO'
-    
-    # Fallback si no encaja en nada
     return 'OTROS GASTOS'
 
 def add_pdf_header(elements, title_text, subtitle_text=""):
@@ -175,7 +150,6 @@ def add_pdf_header(elements, title_text, subtitle_text=""):
     elements.append(Paragraph(title_text, title_style))
     if subtitle_text: elements.append(Paragraph(subtitle_text, sub_style))
 
-# -- GENERADORES PDF COMPACTADOS --
 def generar_pdf_corte(fecha_str, local_str, responsable_str, df_gastos, venta_efectivo, pago_pedidos, transferencias):
     buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []
     add_pdf_header(elements, "PANADERÍA Y REPOSTERÍA JUDITH", "INTEGRACIÓN DE INGRESOS Y EGRESOS - CORTE DE CAJA")
@@ -223,7 +197,7 @@ def generar_pdf_reporte_mensual(f_inicio, f_fin, ingresos_df, gastos_cat_df, gas
 
 def generar_pdf_comparativa_diaria(f_inicio, f_fin, df_resumen, t_ing, t_gas, t_uti):
     buffer = io.BytesIO(); doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36); elements = []
-    add_pdf_header(elements, "PANADERÍA Y REPOSTERÍA JUDITH", f"REPORTE COMPARATIVO DIARIO (INCLUYE RUTAS Y EXTRAS): {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}")
+    add_pdf_header(elements, "PANADERÍA Y REPOSTERÍA JUDITH", f"REPORTE COMPARATIVO DIARIO (INCLUYE RUTAS, ABONOS Y VENTAS EXTRA): {f_inicio.strftime('%d/%m/%Y')} al {f_fin.strftime('%d/%m/%Y')}")
     resumen_data = [["TOTAL INGRESOS GLOBAL", "TOTAL GASTOS", "UTILIDAD NETA"], [f"Q {t_ing:,.2f}", f"Q {t_gas:,.2f}", f"Q {t_uti:,.2f}"]]; t_resumen = Table(resumen_data, colWidths=[150, 150, 150]); t_resumen.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'), ('BOTTOMPADDING', (0,0), (-1,0), 8), ('GRID', (0,0), (-1,-1), 0.5, colors.grey), ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold')])); elements.append(t_resumen); elements.append(Spacer(1, 20))
     h2_style = ParagraphStyle('H2', fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#2980B9"), spaceAfter=10)
     elements.append(Paragraph("<b>Gráfica Comparativa: Ingresos vs Gastos</b>", h2_style)); d = Drawing(480, 200); bc = VerticalBarChart(); bc.x = 40; bc.y = 40; bc.height = 140; bc.width = 420; bc.data = [df_resumen['ingresos'].tolist(), df_resumen['gastos'].tolist()]; bc.strokeColor = colors.white; bc.valueAxis.valueMin = 0; bc.categoryAxis.categoryNames = [fecha.strftime('%d/%m') for fecha in df_resumen['fecha']]; bc.categoryAxis.labels.angle = 45; bc.categoryAxis.labels.dy = -10; bc.categoryAxis.labels.fontSize = 8; bc.bars[0].fillColor = colors.HexColor("#27AE60") ; bc.bars[1].fillColor = colors.HexColor("#E74C3C") 
@@ -347,77 +321,9 @@ with st.sidebar:
 # ==========================================
 
 # ------------------------------------------
-# MÓDULO 2: HISTORIAL DE CORTES CON DESCARGA EN LOTE
+# MÓDULO 1: REGISTRO DE CORTE
 # ------------------------------------------
-if opcion_menu == "📅 Historial de Cortes":
-    st.title("📅 Consulta de Historial e Impresión")
-    tab_dia, tab_lote = st.tabs(["📅 Consulta por Día", "📦 Descargar Lote (ZIP)"])
-    with tab_dia:
-        fecha_consulta = st.date_input("Consultar fecha:", get_fecha_guate(), format="DD/MM/YYYY")
-        try:
-            corte_data = conn.query(f"SELECT id FROM cortes_diarios WHERE fecha = '{fecha_consulta}'", ttl=0)
-            if not corte_data.empty:
-                corte_id = corte_data.iloc[0]['id']
-                ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos, i.transferencias as transferencias FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {corte_id}", ttl=0)
-                gastos_hist = conn.query(f"SELECT c.nombre as Categoria, g.detalle as Detalle, g.monto as Monto FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id WHERE g.corte_id = {corte_id}", ttl=0)
-                sum_venta = ingresos_hist['venta_mostrador'].sum() if not ingresos_hist.empty else 0.0; sum_pedidos = ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0.0; sum_transferencias = ingresos_hist['transferencias'].sum() if not ingresos_hist.empty and 'transferencias' in ingresos_hist.columns else 0.0; sum_efectivo = sum_venta + sum_pedidos; total_ingresos_bruto_hist = sum_efectivo + sum_transferencias; sum_gastos = gastos_hist['monto'].sum() if not gastos_hist.empty else 0.0; neto_efectivo = sum_efectivo - sum_gastos
-                st.markdown(f"### Resumen del {fecha_consulta.strftime('%d/%m/%Y')}")
-                col_h1, col_h2, col_h_bruto, col_h3, col_h4 = st.columns(5)
-                col_h1.metric("💵 Ingresos Efectivo", f"Q {sum_efectivo:.2f}"); col_h2.metric("📱 Transferencias/Fri", f"Q {sum_transferencias:.2f}"); col_h_bruto.metric("💰 Total Ingresos", f"Q {total_ingresos_bruto_hist:.2f}"); col_h3.metric("📉 Gastos", f"Q {sum_gastos:.2f}"); col_h4.metric("⚖️ Efectivo Entregado", f"Q {neto_efectivo:.2f}")
-                st.markdown("---")
-                with st.expander("✏️ Corregir Ingresos de este Día"):
-                    with st.form("form_corregir_ingresos"):
-                        col_e1, col_e2, col_e3 = st.columns(3); nuevo_efectivo = col_e1.number_input("🍞 Venta (Efectivo)", value=float(sum_venta), min_value=0.0, step=50.0); nuevo_pedidos = col_e2.number_input("🎂 Pedidos (Efectivo)", value=float(sum_pedidos), min_value=0.0, step=50.0); nuevo_trans = col_e3.number_input("📱 Transferencias (Fri/Depósitos)", value=float(sum_transferencias), min_value=0.0, step=50.0)
-                        if st.form_submit_button("💾 Guardar Corrección"):
-                            with conn.session as s:
-                                existe = s.execute(text("SELECT id FROM ingresos WHERE corte_id = :cid"), {"cid": int(corte_id)}).fetchone()
-                                if existe: s.execute(text("UPDATE ingresos SET venta_total = :v, credito_pagado = :p, transferencias = :t WHERE corte_id = :cid"), {"v": nuevo_efectivo, "p": nuevo_pedidos, "t": nuevo_trans, "cid": int(corte_id)})
-                                else: ruta_default = s.execute(text("SELECT id FROM rutas_locales LIMIT 1")).fetchone()[0]; s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total, credito_pagado, transferencias) VALUES (:c, :r, :v, :cp, :t)"), {"c": int(corte_id), "r": ruta_default, "v": nuevo_efectivo, "cp": nuevo_pedidos, "t": nuevo_trans})
-                                s.commit()
-                            st.success("✅ ¡Ingresos corregidos exitosamente!"); st.rerun()
-                st.markdown("---")
-                ruta_nombre = ingresos_hist.iloc[0]['ruta'] if not ingresos_hist.empty else "LOCAL MERCADO"
-                df_para_pdf = pd.DataFrame({"Categoría": gastos_hist['categoria'] if not gastos_hist.empty else [], "Detalle": gastos_hist['detalle'] if not gastos_hist.empty else [], "Monto (Q)": gastos_hist['monto'] if not gastos_hist.empty else []})
-                pdf_historico = generar_pdf_corte(fecha_consulta.strftime('%d/%m/%Y'), ruta_nombre, "Histórico", df_para_pdf, sum_venta, sum_pedidos, sum_transferencias)
-                st.download_button(label=f"📥 Descargar PDF del {fecha_consulta.strftime('%d/%m/%Y')} para Imprimir", data=pdf_historico, file_name=f"Corte_{fecha_consulta.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="primary", use_container_width=True)
-                st.markdown("---")
-                col_t1, col_t2 = st.columns(2)
-                with col_t1:
-                    st.subheader("💰 Desglose de Ingresos"); st.dataframe(ingresos_hist, use_container_width=True, hide_index=True) if not ingresos_hist.empty else st.info("No se registraron ingresos este día.")
-                with col_t2:
-                    st.subheader("💸 Desglose de Gastos"); st.dataframe(gastos_hist, use_container_width=True, hide_index=True) if not gastos_hist.empty else st.info("No se registraron gastos este día.")
-            else: st.warning(f"No hay ningún corte guardado en el sistema para la fecha {fecha_consulta.strftime('%d/%m/%Y')}.")
-        except Exception as e: st.error("Error al consultar el historial.")
-    with tab_lote:
-        st.markdown("### 📦 Descargar Múltiples Cortes")
-        col_l1, col_l2 = st.columns(2)
-        f_ini_lote = col_l1.date_input("Desde:", get_fecha_guate().replace(day=1), format="DD/MM/YYYY", key="lote_ini"); f_fin_lote = col_l2.date_input("Hasta:", get_fecha_guate(), format="DD/MM/YYYY", key="lote_fin")
-        if st.button("📦 Generar Archivo ZIP", type="primary", use_container_width=True):
-            with st.spinner("Generando PDFs y comprimiendo..."):
-                try:
-                    q_cortes = f"SELECT id, fecha FROM cortes_diarios WHERE fecha BETWEEN '{f_ini_lote}' AND '{f_fin_lote}'"
-                    df_cortes = conn.query(q_cortes, ttl=0)
-                    if df_cortes.empty: st.warning("No hay cortes registrados en este rango de fechas.")
-                    else:
-                        zip_buffer = io.BytesIO()
-                        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                            for _, c_row in df_cortes.iterrows():
-                                c_id = c_row['id']; c_fecha = pd.to_datetime(c_row['fecha']).date()
-                                ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos, i.transferencias as transferencias FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {c_id}", ttl=0)
-                                gastos_hist = conn.query(f"SELECT c.nombre as Categoria, g.detalle as Detalle, g.monto as Monto FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id WHERE g.corte_id = {c_id}", ttl=0)
-                                sum_venta = ingresos_hist['venta_mostrador'].sum() if not ingresos_hist.empty else 0.0; sum_pedidos = ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0.0; sum_transferencias = ingresos_hist['transferencias'].sum() if not ingresos_hist.empty and 'transferencias' in ingresos_hist.columns else 0.0
-                                ruta_nombre = ingresos_hist.iloc[0]['ruta'] if not ingresos_hist.empty else "LOCAL MERCADO"
-                                df_para_pdf = pd.DataFrame({"Categoría": gastos_hist['categoria'] if not gastos_hist.empty else [], "Detalle": gastos_hist['detalle'] if not gastos_hist.empty else [], "Monto (Q)": gastos_hist['monto'] if not gastos_hist.empty else []})
-                                pdf_bytes = generar_pdf_corte(c_fecha.strftime('%d/%m/%Y'), ruta_nombre, "Histórico", df_para_pdf, sum_venta, sum_pedidos, sum_transferencias)
-                                zip_file.writestr(f"Corte_{c_fecha.strftime('%d-%m-%Y')}.pdf", pdf_bytes.getvalue())
-                        st.success(f"✅ ¡ZIP generado con {len(df_cortes)} cortes!")
-                        st.download_button(label="📥 Descargar Archivo ZIP", data=zip_buffer.getvalue(), file_name=f"Cortes_{f_ini_lote.strftime('%d-%m-%Y')}_al_{f_fin_lote.strftime('%d-%m-%Y')}.zip", mime="application/zip", type="secondary", use_container_width=True)
-                except Exception as e: st.error(f"Error al generar el lote: {e}")
-
-# ------------------------------------------
-# EL RESTO DE MÓDULOS (INTACTOS PERO ORDENADOS)
-# ------------------------------------------
-elif opcion_menu == "📝 Registro de Corte":
+if opcion_menu == "📝 Registro de Corte":
     st.title("🍞 Ingreso Diario de Corte")
     st.markdown("### 📋 Datos del Corte")
     try:
@@ -489,6 +395,75 @@ elif opcion_menu == "📝 Registro de Corte":
     if 'pdf_generado' in st.session_state:
         st.markdown("---"); st.download_button(label="📥 Descargar PDF del Corte para Imprimir", data=st.session_state['pdf_generado'], file_name=st.session_state['pdf_nombre'], mime="application/pdf", type="secondary", use_container_width=True)
 
+# ------------------------------------------
+# MÓDULO 2: HISTORIAL DE CORTES
+# ------------------------------------------
+elif opcion_menu == "📅 Historial de Cortes":
+    st.title("📅 Consulta de Historial e Impresión")
+    tab_dia, tab_lote = st.tabs(["📅 Consulta por Día", "📦 Descargar Lote (ZIP)"])
+    with tab_dia:
+        fecha_consulta = st.date_input("Consultar fecha:", get_fecha_guate(), format="DD/MM/YYYY")
+        try:
+            corte_data = conn.query(f"SELECT id FROM cortes_diarios WHERE fecha = '{fecha_consulta}'", ttl=0)
+            if not corte_data.empty:
+                corte_id = corte_data.iloc[0]['id']
+                ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos, i.transferencias as transferencias FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {corte_id}", ttl=0)
+                gastos_hist = conn.query(f"SELECT c.nombre as Categoria, g.detalle as Detalle, g.monto as Monto FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id WHERE g.corte_id = {corte_id}", ttl=0)
+                sum_venta = ingresos_hist['venta_mostrador'].sum() if not ingresos_hist.empty else 0.0; sum_pedidos = ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0.0; sum_transferencias = ingresos_hist['transferencias'].sum() if not ingresos_hist.empty and 'transferencias' in ingresos_hist.columns else 0.0; sum_efectivo = sum_venta + sum_pedidos; total_ingresos_bruto_hist = sum_efectivo + sum_transferencias; sum_gastos = gastos_hist['monto'].sum() if not gastos_hist.empty else 0.0; neto_efectivo = sum_efectivo - sum_gastos
+                st.markdown(f"### Resumen del {fecha_consulta.strftime('%d/%m/%Y')}")
+                col_h1, col_h2, col_h_bruto, col_h3, col_h4 = st.columns(5)
+                col_h1.metric("💵 Ingresos Efectivo", f"Q {sum_efectivo:.2f}"); col_h2.metric("📱 Transferencias/Fri", f"Q {sum_transferencias:.2f}"); col_h_bruto.metric("💰 Total Ingresos", f"Q {total_ingresos_bruto_hist:.2f}"); col_h3.metric("📉 Gastos", f"Q {sum_gastos:.2f}"); col_h4.metric("⚖️ Efectivo Entregado", f"Q {neto_efectivo:.2f}")
+                st.markdown("---")
+                with st.expander("✏️ Corregir Ingresos de este Día"):
+                    with st.form("form_corregir_ingresos"):
+                        col_e1, col_e2, col_e3 = st.columns(3); nuevo_efectivo = col_e1.number_input("🍞 Venta (Efectivo)", value=float(sum_venta), min_value=0.0, step=50.0); nuevo_pedidos = col_e2.number_input("🎂 Pedidos (Efectivo)", value=float(sum_pedidos), min_value=0.0, step=50.0); nuevo_trans = col_e3.number_input("📱 Transferencias (Fri/Depósitos)", value=float(sum_transferencias), min_value=0.0, step=50.0)
+                        if st.form_submit_button("💾 Guardar Corrección"):
+                            with conn.session as s:
+                                existe = s.execute(text("SELECT id FROM ingresos WHERE corte_id = :cid"), {"cid": int(corte_id)}).fetchone()
+                                if existe: s.execute(text("UPDATE ingresos SET venta_total = :v, credito_pagado = :p, transferencias = :t WHERE corte_id = :cid"), {"v": nuevo_efectivo, "p": nuevo_pedidos, "t": nuevo_trans, "cid": int(corte_id)})
+                                else: ruta_default = s.execute(text("SELECT id FROM rutas_locales LIMIT 1")).fetchone()[0]; s.execute(text("INSERT INTO ingresos (corte_id, ruta_id, venta_total, credito_pagado, transferencias) VALUES (:c, :r, :v, :cp, :t)"), {"c": int(corte_id), "r": ruta_default, "v": nuevo_efectivo, "cp": nuevo_pedidos, "t": nuevo_trans})
+                                s.commit()
+                            st.success("✅ ¡Ingresos corregidos exitosamente!"); st.rerun()
+                st.markdown("---")
+                ruta_nombre = ingresos_hist.iloc[0]['ruta'] if not ingresos_hist.empty else "LOCAL MERCADO"
+                df_para_pdf = pd.DataFrame({"Categoría": gastos_hist['categoria'] if not gastos_hist.empty else [], "Detalle": gastos_hist['detalle'] if not gastos_hist.empty else [], "Monto (Q)": gastos_hist['monto'] if not gastos_hist.empty else []})
+                pdf_historico = generar_pdf_corte(fecha_consulta.strftime('%d/%m/%Y'), ruta_nombre, "Histórico", df_para_pdf, sum_venta, sum_pedidos, sum_transferencias)
+                st.download_button(label=f"📥 Descargar PDF del {fecha_consulta.strftime('%d/%m/%Y')} para Imprimir", data=pdf_historico, file_name=f"Corte_{fecha_consulta.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="primary", use_container_width=True)
+                st.markdown("---")
+                col_t1, col_t2 = st.columns(2)
+                with col_t1: st.subheader("💰 Desglose de Ingresos"); st.dataframe(ingresos_hist, use_container_width=True, hide_index=True) if not ingresos_hist.empty else st.info("No se registraron ingresos este día.")
+                with col_t2: st.subheader("💸 Desglose de Gastos"); st.dataframe(gastos_hist, use_container_width=True, hide_index=True) if not gastos_hist.empty else st.info("No se registraron gastos este día.")
+            else: st.warning(f"No hay ningún corte guardado en el sistema para la fecha {fecha_consulta.strftime('%d/%m/%Y')}.")
+        except Exception as e: st.error("Error al consultar el historial.")
+    with tab_lote:
+        st.markdown("### 📦 Descargar Múltiples Cortes")
+        col_l1, col_l2 = st.columns(2)
+        f_ini_lote = col_l1.date_input("Desde:", get_fecha_guate().replace(day=1), format="DD/MM/YYYY", key="lote_ini"); f_fin_lote = col_l2.date_input("Hasta:", get_fecha_guate(), format="DD/MM/YYYY", key="lote_fin")
+        if st.button("📦 Generar Archivo ZIP", type="primary", use_container_width=True):
+            with st.spinner("Generando PDFs y comprimiendo..."):
+                try:
+                    q_cortes = f"SELECT id, fecha FROM cortes_diarios WHERE fecha BETWEEN '{f_ini_lote}' AND '{f_fin_lote}'"
+                    df_cortes = conn.query(q_cortes, ttl=0)
+                    if df_cortes.empty: st.warning("No hay cortes registrados en este rango de fechas.")
+                    else:
+                        zip_buffer = io.BytesIO()
+                        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                            for _, c_row in df_cortes.iterrows():
+                                c_id = c_row['id']; c_fecha = pd.to_datetime(c_row['fecha']).date()
+                                ingresos_hist = conn.query(f"SELECT r.nombre as Ruta, i.venta_total as Venta_Mostrador, i.credito_pagado as Pedidos, i.transferencias as transferencias FROM ingresos i JOIN rutas_locales r ON i.ruta_id = r.id WHERE i.corte_id = {c_id}", ttl=0)
+                                gastos_hist = conn.query(f"SELECT c.nombre as Categoria, g.detalle as Detalle, g.monto as Monto FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id WHERE g.corte_id = {c_id}", ttl=0)
+                                sum_venta = ingresos_hist['venta_mostrador'].sum() if not ingresos_hist.empty else 0.0; sum_pedidos = ingresos_hist['pedidos'].sum() if not ingresos_hist.empty else 0.0; sum_transferencias = ingresos_hist['transferencias'].sum() if not ingresos_hist.empty and 'transferencias' in ingresos_hist.columns else 0.0
+                                ruta_nombre = ingresos_hist.iloc[0]['ruta'] if not ingresos_hist.empty else "LOCAL MERCADO"
+                                df_para_pdf = pd.DataFrame({"Categoría": gastos_hist['categoria'] if not gastos_hist.empty else [], "Detalle": gastos_hist['detalle'] if not gastos_hist.empty else [], "Monto (Q)": gastos_hist['monto'] if not gastos_hist.empty else []})
+                                pdf_bytes = generar_pdf_corte(c_fecha.strftime('%d/%m/%Y'), ruta_nombre, "Histórico", df_para_pdf, sum_venta, sum_pedidos, sum_transferencias)
+                                zip_file.writestr(f"Corte_{c_fecha.strftime('%d-%m-%Y')}.pdf", pdf_bytes.getvalue())
+                        st.success(f"✅ ¡ZIP generado con {len(df_cortes)} cortes!")
+                        st.download_button(label="📥 Descargar Archivo ZIP", data=zip_buffer.getvalue(), file_name=f"Cortes_{f_ini_lote.strftime('%d-%m-%Y')}_al_{f_fin_lote.strftime('%d-%m-%Y')}.zip", mime="application/zip", type="secondary", use_container_width=True)
+                except Exception as e: st.error(f"Error al generar el lote: {e}")
+
+# ------------------------------------------
+# MÓDULO 3: ESTADÍSTICAS
+# ------------------------------------------
 elif opcion_menu == "📈 Estadísticas":
     st.title("📈 Estadísticas y Finanzas")
     meses_dict = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
@@ -521,6 +496,9 @@ elif opcion_menu == "📈 Estadísticas":
         else: st.info(f"📊 No hay gastos registrados para el mes de {mes_seleccionado} {anio_seleccionado}.")
     except Exception as e: st.error(f"Error al cargar las estadísticas: {e}")
 
+# ------------------------------------------
+# MÓDULO 4: COMPARATIVA DIARIA
+# ------------------------------------------
 elif opcion_menu == "📆 Comparativa Diaria":
     st.title("📆 Comparativa de Ingresos vs Gastos por Día")
     hoy = get_fecha_guate(); primer_dia_mes = hoy.replace(day=1)
@@ -554,6 +532,9 @@ elif opcion_menu == "📆 Comparativa Diaria":
                     st.download_button(label="📥 Descargar Comparativa en PDF", data=pdf_comparativa, file_name=f"Comparativa_Diaria_{fecha_inicio_comp.strftime('%d-%m-%Y')}_al_{fecha_fin_comp.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
             except Exception as e: st.error(f"Error al cargar la comparativa: {e}")
 
+# ------------------------------------------
+# MÓDULO 5: DÍAS ESTRELLA
+# ------------------------------------------
 elif opcion_menu == "🏆 Días Estrella":
     st.title("🏆 Días Estrella (Rendimiento Semanal)")
     hoy = get_fecha_guate(); primer_dia_mes = hoy.replace(day=1)
@@ -587,6 +568,9 @@ elif opcion_menu == "🏆 Días Estrella":
                     pdf_estrellas = generar_pdf_dias_estrella(fecha_inicio_est, fecha_fin_est, df_agrupado, mejor_dia_nombre, peor_dia_nombre, promedio_general, dia_record); st.download_button(label="📥 Descargar Análisis en PDF", data=pdf_estrellas, file_name=f"Dias_Estrella_{fecha_inicio_est.strftime('%d-%m-%Y')}_al_{fecha_fin_est.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
             except Exception as e: st.error(f"Error al cargar el análisis: {e}")
 
+# ------------------------------------------
+# MÓDULO 6: RUTA Y PEDIDOS (XML LECTOR NATIVO CON OPCIÓN DE FORZAR CONTADO)
+# ------------------------------------------
 elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
     st.title("🚚 Control de Ruta y Pedidos (Lector SAT)")
     tab_xml, tab_cuenta, tab_historial_rutas, tab_estadisticas_rutas, tab_config_sucursales = st.tabs(["📥 1. Lector de Facturas", "📓 2. Cuenta de Jeny", "🗄️ 3. Historial General", "📊 4. Estadísticas", "⚙️ 5. Configurar Sucursales"])
@@ -611,31 +595,24 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
         
         if archivo_xml is not None:
             try:
-                # LECTOR NATIVO CON REGEX (Anti-Errores de SAT)
                 xml_str = archivo_xml.getvalue().decode('utf-8', errors='ignore')
-                
                 f_emision_m = re.search(r'FechaHoraEmision="([^"]+)"', xml_str)
                 fecha_factura = f_emision_m.group(1)[:10] if f_emision_m else str(get_fecha_guate())
-                
                 cliente_m = re.search(r'NombreReceptor="([^"]+)"', xml_str)
                 cliente_nombre_sat = cliente_m.group(1) if cliente_m else "Cliente Generico"
-                
                 nit_m = re.search(r'IDReceptor="([^"]+)"', xml_str)
                 nit_cliente = nit_m.group(1) if nit_m else "CF"
                 
                 st.markdown("---")
                 st.markdown(f"### 🏢 Facturado a: **{cliente_nombre_sat}** (NIT: {nit_cliente})")
                 st.markdown(f"📅 **Fecha de Emisión:** {pd.to_datetime(fecha_factura).strftime('%d/%m/%Y')}")
-                
                 st.markdown("#### 📍 Identificación de Sucursal / Destino")
                 es_oasis_detectado = (nit_cliente.replace("-", "") == "98133136" or "TIENDAS DE ORIENTE" in cliente_nombre_sat.upper() or "OASIS" in cliente_nombre_sat.upper() or "QUALY" in cliente_nombre_sat.upper())
-                
                 forzar_contado = False
                 if es_oasis_detectado:
                     forzar_contado = st.checkbox("✅ Forzar como Venta al Contado (No sumar a la cuenta de Jeny)")
                 
                 es_oasis_final = es_oasis_detectado and not forzar_contado
-                
                 col_suc1, col_suc2 = st.columns(2)
                 if es_oasis_final:
                     sucursal_seleccionada = col_suc1.selectbox("Selecciona la Sucursal de Oasis:", obtener_lista_sucursales())
@@ -652,22 +629,18 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
                     cant_m = re.search(r'<[^>]*?Cantidad[^>]*>([\d\.]+)</', block, re.IGNORECASE)
                     desc_m = re.search(r'<[^>]*?Descripcion[^>]*>(.*?)</', block, re.IGNORECASE)
                     tot_m = re.search(r'<[^>]*?Total[^>]*>([\d\.]+)</', block, re.IGNORECASE)
-                    
                     cant = float(cant_m.group(1)) if cant_m else 0.0
                     desc = desc_m.group(1).strip() if desc_m else "Sin descripción"
                     tot = float(tot_m.group(1)) if tot_m else 0.0
-                    
                     desc_low = desc.lower()
                     if 'pasta' in desc_low or 'pollo' in desc_low or 'taco' in desc_low: categoria = "Pasta / Salado"
                     else: categoria = "Pan / Repostería"
                     lista_items.append({"Cantidad": cant, "Descripción": desc, "Categoría": categoria, "Total (Q)": tot})
                         
                 df_xml = pd.DataFrame(lista_items)
-                
                 if not df_xml.empty:
                     df_pan = df_xml[df_xml['Categoría'] == 'Pan / Repostería']
                     df_pasta = df_xml[df_xml['Categoría'] == 'Pasta / Salado']
-                    
                     tot_pan = float(df_pan['Total (Q)'].sum()) if not df_pan.empty else 0.0
                     tot_pasta = float(df_pasta['Total (Q)'].sum()) if not df_pasta.empty else 0.0
                     gran_total = float(df_xml['Total (Q)'].sum()) if not df_xml.empty else 0.0
@@ -695,7 +668,6 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
                                     INSERT INTO control_rutas (fecha_factura, cliente, sucursal, total_pan, total_pasta, gran_total)
                                     VALUES (:f, :c, :suc, :tpan, :tpasta, :gt)
                                 """), {"f": fecha_factura, "c": cliente_nombre_sat, "suc": sucursal_final, "tpan": tot_pan, "tpasta": tot_pasta, "gt": gran_total})
-                                
                                 if es_oasis_final:
                                     s.execute(text("""
                                         INSERT INTO cuenta_ruta_jeny (fecha, tipo, monto, detalle)
@@ -834,6 +806,9 @@ elif opcion_menu == "🚚 Ruta y Pedidos (XML)":
                         st.success("🗑️ Eliminado."); st.rerun()
             except: pass
 
+# ------------------------------------------
+# MÓDULOS VENTAS EXTRA Y PROVEEDORES
+# ------------------------------------------
 elif opcion_menu == "📝 Ventas Extra (Recibos)":
     st.title("📝 Control de Ventas Extra (Ingresos Aparte)")
     st.write("Registra ventas a clientes específicos e imprime su recibo. Esto sumará a los ingresos en tus estadísticas.")
@@ -938,6 +913,9 @@ elif opcion_menu == "💳 Proveedores":
             else: st.info("Aún no tienes deudas pagadas en el historial.")
     except Exception as e: st.error(f"Error: {e}")
 
+# ------------------------------------------
+# MÓDULOS DE PLANILLAS Y USUARIOS
+# ------------------------------------------
 elif opcion_menu == "👨‍🍳 Planilla Panaderos":
     st.title("👨‍🍳 Control de Producción y Recibos")
     tab_planilla, tab_recibo, tab_historial_recibos = st.tabs(["📝 1. Calcular Planilla (Detalle)", "🧾 2. Emitir Recibo de Pago", "🗄️ 3. Historial de Recibos"])
@@ -1084,38 +1062,34 @@ elif opcion_menu == "👩‍💼 Planilla Quincenal":
             else: st.info("Aún no tienes planillas guardadas en el historial.")
         except Exception as e: st.error(f"Esperando a que crees la tabla 'planillas_quincenales' en Neon. Detalle: {e}")
 
-elif opcion_menu == "📊 Reporte PDF Mensual":
-    st.title("📊 Generador de Reporte Financiero (PDF)")
-    st.write("Selecciona las fechas para crear un reporte gerencial con gráfica de pastel y resumen de gastos consolidados.")
-    hoy = get_fecha_guate(); primer_dia_mes = hoy.replace(day=1)
-    col_f1, col_f2 = st.columns(2); fecha_inicio = col_f1.date_input("Desde:", primer_dia_mes, format="DD/MM/YYYY"); fecha_fin = col_f2.date_input("Hasta:", hoy, format="DD/MM/YYYY")
-    if st.button("📑 Generar Reporte PDF", type="primary"):
-        with st.spinner("Calculando agrupaciones y dibujando gráficas..."):
-            try:
-                query_ing = """SELECT SUM(i.venta_total) as efectivo, SUM(COALESCE(i.credito_pagado, 0)) as pedidos, SUM(COALESCE(i.transferencias, 0)) as transferencias FROM ingresos i JOIN cortes_diarios cd ON i.corte_id = cd.id WHERE cd.fecha BETWEEN :inicio AND :fin"""
-                ingresos_df = conn.query(query_ing, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
-                query_cat = """SELECT c.nombre as categoria, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id JOIN cortes_diarios cd ON g.corte_id = cd.id WHERE cd.fecha BETWEEN :inicio AND :fin GROUP BY c.nombre ORDER BY total DESC"""
-                gastos_cat_df = conn.query(query_cat, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
-                query_det = """SELECT c.nombre as categoria, LOWER(g.detalle) as detalle, SUM(g.monto) as total FROM gastos g JOIN categorias_gasto c ON g.categoria_id = c.id JOIN cortes_diarios cd ON g.corte_id = cd.id WHERE cd.fecha BETWEEN :inicio AND :fin GROUP BY c.nombre, LOWER(g.detalle) ORDER BY c.nombre, total DESC"""
-                gastos_det_df = conn.query(query_det, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
-                
-                query_jeny = """SELECT SUM(monto) as abonos FROM cuenta_ruta_jeny WHERE tipo = 'ABONO' AND fecha BETWEEN :inicio AND :fin"""
-                jeny_totales = conn.query(query_jeny, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
-                ing_jeny = float(jeny_totales.iloc[0]['abonos']) if not jeny_totales.empty and pd.notna(jeny_totales.iloc[0]['abonos']) else 0.0
-                
-                query_rutas = """SELECT SUM(gran_total) as rutas_contado FROM control_rutas WHERE cliente NOT ILIKE '%ORIENTE%' AND cliente NOT ILIKE '%OASIS%' AND cliente NOT ILIKE '%QUALY%' AND fecha_factura BETWEEN :inicio AND :fin"""
-                rutas_totales = conn.query(query_rutas, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
-                ing_rutas = float(rutas_totales.iloc[0]['rutas_contado']) if not rutas_totales.empty and pd.notna(rutas_totales.iloc[0]['rutas_contado']) else 0.0
-                
-                try: 
-                    query_ve = "SELECT SUM(total) as ve FROM ventas_extra WHERE fecha BETWEEN :inicio AND :fin"
-                    ve_totales = conn.query(query_ve, params={"inicio": fecha_inicio, "fin": fecha_fin}, ttl=0)
-                    ing_ve = float(ve_totales.iloc[0]['ve']) if not ve_totales.empty and pd.notna(ve_totales.iloc[0]['ve']) else 0.0
-                except: ing_ve = 0.0
-
-                if (not ingresos_df.empty and ingresos_df['efectivo'].sum() > 0) or not gastos_cat_df.empty or ing_jeny > 0 or ing_rutas > 0 or ing_ve > 0:
-                    buffer_pdf = generar_pdf_reporte_mensual(fecha_inicio, fecha_fin, ingresos_df, gastos_cat_df, gastos_det_df, ing_jeny, ing_rutas, ing_ve)
-                    st.success("✅ ¡Tu Reporte Gerencial ha sido generado con éxito!")
-                    st.download_button(label="📥 Descargar Reporte PDF", data=buffer_pdf, file_name=f"Reporte_Panaderia_{fecha_inicio.strftime('%d-%m-%Y')}_al_{fecha_fin.strftime('%d-%m-%Y')}.pdf", mime="application/pdf", type="secondary", use_container_width=True)
-                else: st.warning(f"⚠️ No se encontraron registros de ventas ni gastos entre el {fecha_inicio.strftime('%d/%m/%Y')} y el {fecha_fin.strftime('%d/%m/%Y')}.")
-            except Exception as e: st.error(f"Error al generar el reporte: {e}")
+elif opcion_menu == "👥 Usuarios":
+    st.title("👥 Gestión de Usuarios")
+    col1, col2 = st.columns(2)
+    with col1:
+        with st.expander("➕ Crear Nuevo Usuario"):
+            with st.form("form_crear_usr"):
+                n_usr = st.text_input("Nombre de Usuario").lower(); n_pwd = st.text_input("Contraseña")
+                if st.form_submit_button("Guardar Usuario"):
+                    if n_usr and n_pwd:
+                        try:
+                            with conn.session as s: s.execute(text("INSERT INTO usuarios_app (usuario, password) VALUES (:u, :p)"), {"u": n_usr, "p": n_pwd}); s.commit()
+                            st.success(f"Usuario '{n_usr}' creado."); st.rerun()
+                        except Exception as e: st.error("Error al crear (quizás el usuario ya existe).")
+                    else: st.warning("Llena ambos campos.")
+    try:
+        df_usr = conn.query("SELECT id, usuario, password FROM usuarios_app ORDER BY id", ttl=0)
+        if not df_usr.empty:
+            st.markdown("#### ✏️ Editar / Ver Usuarios Actuales")
+            df_edit_usr = st.data_editor(df_usr, column_config={"id": None, "usuario": "Usuario", "password": "Password"}, hide_index=True, use_container_width=True)
+            if st.button("💾 Guardar Cambios"):
+                with conn.session as s:
+                    for i, r in df_edit_usr.iterrows(): s.execute(text("UPDATE usuarios_app SET usuario=:u, password=:p WHERE id=:id"), {"u": r['usuario'], "p": r['password'], "id": r['id']})
+                    s.commit()
+                st.success("Usuarios actualizados."); st.rerun()
+            st.markdown("---"); usr_borrar = st.selectbox("Selecciona para ELIMINAR:", df_usr['usuario'])
+            if st.button("🗑️ Eliminar Usuario"):
+                if usr_borrar == 'admin' or usr_borrar == 'roberto': st.warning("No puedes eliminar a los administradores principales.")
+                else:
+                    with conn.session as s: s.execute(text("DELETE FROM usuarios_app WHERE usuario=:u"), {"u": usr_borrar}); s.commit()
+                    st.success("Usuario eliminado."); st.rerun()
+    except Exception as e: st.error("Error al cargar usuarios.")
